@@ -10,5 +10,5 @@ hlt
   str r1 r2 0
   ret
 .user_func_main
-    ldi r1 5
+    ldi r1 4
     ret

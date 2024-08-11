@@ -4,7 +4,15 @@ mod code_gen;
 mod emitter;
 
 fn main() {
-    let input = "int main() { return 5; }".to_string();
+    // get file name from command line, read file, compile it
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        eprintln!("Usage: {} <file>", args[0]);
+        std::process::exit(1);
+    }
+
+    let input = std::fs::read_to_string(&args[1]).expect("Failed to read file");
+
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
