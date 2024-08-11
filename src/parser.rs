@@ -62,10 +62,11 @@ impl Parser {
         }
         self.next_token();
 
-        let body = self.parse_statement();
+        let mut body: Vec<nodes::Statement> = Vec::new();
 
-        if self.current_token != TokenType::RBrace {
-            panic!("Expected '}}', got {:?}", self.current_token);
+        while self.current_token != TokenType::RBrace {
+            let stmt = self.parse_statement();
+            body.push(stmt);
         }
 
         nodes::FuncDecl {
@@ -95,11 +96,37 @@ impl Parser {
         nodes::Statement::Return(expr)
     }
 
+    fn parse_unop(&mut self) -> nodes::Expression {
+        match self.current_token {
+            TokenType::Tilde => {
+                self.next_token();
+                let expr = self.parse_expression();
+                nodes::Expression::Unop(nodes::Unop::BitwiseNot, Box::new(expr))
+            }
+            TokenType::Minus => {
+                self.next_token();
+                let expr = self.parse_expression();
+                nodes::Expression::Unop(nodes::Unop::Negate, Box::new(expr))
+            }
+            _ => panic!("Unknown token: {:?}", self.current_token),
+        }
+    }
+
     fn parse_expression(&mut self) -> nodes::Expression {
         match self.current_token {
             TokenType::IntegerLiteral(i) => {
                 self.next_token();
                 nodes::Expression::IntegerLiteral(i)
+            }
+            TokenType::Tilde | TokenType::Minus => self.parse_unop(),
+            TokenType::LParen => {
+                self.next_token();
+                let expr = self.parse_expression();
+                if self.current_token != TokenType::RParen {
+                    panic!("Expected ')', got {:?}", self.current_token);
+                }
+                self.next_token();
+                expr
             }
             _ => panic!("Unknown token: {:?}", self.current_token),
         }

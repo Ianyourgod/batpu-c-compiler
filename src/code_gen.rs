@@ -2,58 +2,16 @@
 
 pub mod assembly;
 
-use crate::parser::nodes;
+mod convert;
+mod pseudo_replace;
+mod instr_fixup;
 
-pub struct CodeGen {
-    program: nodes::Program,
-}
+use crate::tacky::definition;
 
-impl CodeGen {
-    pub fn new(program: nodes::Program) -> CodeGen {
-        CodeGen {
-            program,
-        }
-    }
-
-    pub fn generate(&self) -> assembly::Program {
-        let mut assembly = assembly::Program {
-            statements: Vec::new(),
-        };
-
-        for stmt in &self.program.statements {
-            self.generate_function(stmt, &mut assembly);
-        }
-
-        assembly
-    }
-
-    fn generate_function(&self, func: &nodes::FuncDecl, program: &mut assembly::Program) {
-        let mut instrs: Vec<assembly::Instruction> = Vec::new();
-
-        self.generate_instruction(&func.body, &mut instrs);
-
-        let func = assembly::FuncDecl {
-            name: func.name.clone(),
-            body: instrs,
-        };
-
-        program.statements.push(func);
-    }
-
-    fn generate_instruction(&self, stmt: &nodes::Statement, instructions: &mut Vec<assembly::Instruction>) {
-        match stmt {
-            nodes::Statement::Return(ref expr) => {
-                self.generate_expression(expr, instructions);
-                instructions.push(assembly::Instruction::Return);
-            }
-        }
-    }
-
-    fn generate_expression(&self, expr: &nodes::Expression, instructions: &mut Vec<assembly::Instruction>) {
-        match expr {
-            nodes::Expression::IntegerLiteral(i) => {
-                instructions.push(assembly::Instruction::Ldi(assembly::Register::new("r1".to_string()), *i));
-            }
-        }
-    }
+pub fn convert(program: definition::Program) -> assembly::Program {
+    let convert_pass = convert::ConvertPass::new(program);
+    let mut pseudo_pass = pseudo_replace::PsuedoReplacePass::new(convert_pass.generate());
+    let (pseudo_program, stack_offset) = pseudo_pass.generate();
+    let instr_fixup_pass = instr_fixup::InstructionFixupPass::new(pseudo_program, stack_offset);
+    instr_fixup_pass.generate()
 }

@@ -17,6 +17,7 @@ pub enum TokenType {
     Minus,
     Star,
     Slash,
+    Tilde,
     // Literals
     Identifier(String),
     IntegerLiteral(i8),
@@ -75,6 +76,7 @@ impl Lexer {
             '-' => TokenType::Minus,
             '*' => TokenType::Star,
             '/' => TokenType::Slash,
+            '~' => TokenType::Tilde,
             '\0' => TokenType::EOF,
             _ => {
                 if is_letter(self.ch) {
