@@ -52,6 +52,13 @@ impl PsuedoReplacePass {
 
                 instructions.push(assembly::Instruction::Unary(op.clone(), src, dst));
             },
+            assembly::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
+                let src1 = self.emit_operand(src1);
+                let src2 = self.emit_operand(src2);
+                let dst = self.emit_operand(dst);
+
+                instructions.push(assembly::Instruction::Binary(op.clone(), src1, src2, dst));
+            },
             assembly::Instruction::Mov(ref src, ref dst) => {
                 let src = self.emit_operand(src);
                 let dst = self.emit_operand(dst);

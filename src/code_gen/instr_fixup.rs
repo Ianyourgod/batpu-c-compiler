@@ -146,6 +146,45 @@ impl InstructionFixupPass {
                     }
                 }
             },
+            assembly::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
+                let (is_src1_reg, src1_reg) = self.is_register(src1);
+                let (is_src2_reg, src2_reg) = self.is_register(src2);
+                let (is_dst_reg, dst_reg) = self.is_register(dst);
+
+                if is_src1_reg && is_src2_reg && is_dst_reg {
+                    instructions.push(stmt.clone())
+                } else {
+                    let src1_reg = if is_src1_reg { src1_reg } else { assembly::Register::new("r10".to_string()) };
+                    let src2_reg = if is_src2_reg { src2_reg } else { assembly::Register::new("r11".to_string()) };
+                    let dst_reg = if is_dst_reg { dst_reg } else { assembly::Register::new("r12".to_string()) }; 
+
+                    if !is_src1_reg { self.to_register(src1, &src1_reg, instructions) };
+                    if !is_src2_reg { self.to_register(src2, &src2_reg, instructions) };
+
+                    instructions.push(assembly::Instruction::Binary(
+                        op.clone(),
+                        assembly::Operand::Register(src1_reg),
+                        assembly::Operand::Register(src2_reg),
+                        assembly::Operand::Register(dst_reg.clone())
+                    ));
+
+                    if is_dst_reg {
+                        return;
+                    }
+
+                    let (is_stack, offset) = self.is_stack(dst);
+
+                    if is_stack {
+                        instructions.push(assembly::Instruction::Str(
+                            assembly::Register::new("rbp".to_string()),
+                            offset,
+                            dst_reg,
+                        ));
+                    } else {
+                        panic!("Invalid destination operand: {:?}", dst);
+                    }
+                }
+            },
             _ => instructions.push(stmt.clone()),
         }
     }

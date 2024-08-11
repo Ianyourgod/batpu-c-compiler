@@ -18,10 +18,17 @@ pub enum Statement {
 pub enum Expression {
     IntegerLiteral(i8),
     Unop(Unop, Box<Expression>),
+    Binop(Binop, Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]
 pub enum Unop {
     Negate,
     BitwiseNot,
+}
+
+#[derive(Debug, Clone)]
+pub enum Binop {
+    Add,
+    Subtract,
 }

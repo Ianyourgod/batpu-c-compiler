@@ -13,6 +13,7 @@ pub struct FuncDecl {
 pub enum Instruction {
     Return(Val),
     Unary(Unop, Val, Val),
+    Binary(Binop, Val, Val, Val),
 }
 
 #[derive(Debug, Clone)]
@@ -25,4 +26,10 @@ pub enum Val {
 pub enum Unop {
     Negate,
     BitwiseNot,
+}
+
+#[derive(Debug)]
+pub enum Binop {
+    Add,
+    Subtract,
 }

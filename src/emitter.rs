@@ -65,6 +65,13 @@ hlt
         }
     }
 
+    fn binop(&self, op: &assembly::Binop) -> String {
+        match op {
+            assembly::Binop::Add => "add",
+            assembly::Binop::Subtract => "sub",
+        }.to_string()
+    }
+
     fn emit_instruction(&self, instr: &assembly::Instruction) -> String {
         match instr {
             assembly::Instruction::Mov(ref src, ref dst) => {
@@ -78,6 +85,13 @@ hlt
             }
             assembly::Instruction::Unary(ref op, ref src, ref dst) => {
                 self.emit_unop(op, src, dst)
+            }
+            assembly::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
+                format!("{} {} {} {}",
+                        self.binop(op),
+                        self.emit_operand(src1),
+                        self.emit_operand(src2),
+                        self.emit_operand(dst))
             }
             assembly::Instruction::AllocateStack(i) => {
                 format!("adi r14 -{}", i)

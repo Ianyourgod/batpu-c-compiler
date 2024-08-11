@@ -52,6 +52,13 @@ impl Tacky {
         name
     }
 
+    fn convert_binop(&self, op: &nodes::Binop) -> definition::Binop {
+        match op {
+            nodes::Binop::Add => definition::Binop::Add,
+            nodes::Binop::Subtract => definition::Binop::Subtract,
+        }
+    }
+
     fn emit_expression(&mut self, expr: &nodes::Expression, body: &mut Vec<definition::Instruction>) -> definition::Val {
         match expr {
             nodes::Expression::IntegerLiteral(i) => {
@@ -66,6 +73,15 @@ impl Tacky {
                     nodes::Unop::BitwiseNot => definition::Unop::BitwiseNot,
                 };
                 body.push(definition::Instruction::Unary(tacky_op, src, dest.clone()));
+                dest
+            }
+            nodes::Expression::Binop(op, ref lft, ref rht) => {
+                let lhs = self.emit_expression(lft, body);
+                let rhs = self.emit_expression(rht, body);
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone());
+                let tacky_op = self.convert_binop(op);
+                body.push(definition::Instruction::Binary(tacky_op, lhs, rhs, dest.clone()));
                 dest
             }
         }

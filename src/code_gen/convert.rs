@@ -56,6 +56,14 @@ impl ConvertPass {
                     self.convert_val(dst)
                 ));
             },
+            definition::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
+                instructions.push(assembly::Instruction::Binary(
+                    self.convert_binop(op),
+                    self.convert_val(src1),
+                    self.convert_val(src2),
+                    self.convert_val(dst)
+                ));
+            },
         }
     }
 
@@ -70,6 +78,13 @@ impl ConvertPass {
         match op {
             definition::Unop::Negate => assembly::Unop::Negate,
             definition::Unop::BitwiseNot => assembly::Unop::BitwiseNot,
+        }
+    }
+
+    fn convert_binop(&self, op: &definition::Binop) -> assembly::Binop {
+        match op {
+            definition::Binop::Add => assembly::Binop::Add,
+            definition::Binop::Subtract => assembly::Binop::Subtract,
         }
     }
 }
