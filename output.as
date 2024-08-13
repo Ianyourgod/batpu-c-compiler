@@ -15,16 +15,22 @@ hlt
     str r14 r15 0
     adi r14 -1
     mov r14 r15
-    adi r14 -2
+    adi r14 -4
     ldi r10 1
-    ldi r11 5
+    ldi r11 2
     add r10 r11 r12
     str r15 r12 -1
     lod r15 r10 -1
-    ldi r11 3
-    sub r10 r11 r12
-    str r15 r12 -2
+    mov r10 r11
+    str r15 r11 -2
     lod r15 r10 -2
+    ldi r11 4
+    sub r10 r11 r12
+    str r15 r12 -3
+    lod r15 r10 -3
+    mov r10 r11
+    str r15 r11 -4
+    lod r15 r10 -4
     mov r10 r1
     mov r15 r14
     lod r14 r15 0

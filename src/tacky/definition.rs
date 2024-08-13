@@ -14,6 +14,7 @@ pub enum Instruction {
     Return(Val),
     Unary(Unop, Val, Val),
     Binary(Binop, Val, Val, Val),
+    Copy(Val, Val),
 }
 
 #[derive(Debug, Clone)]

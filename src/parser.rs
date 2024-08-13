@@ -36,7 +36,7 @@ impl Parser {
     }
 
     fn parse_function_declaration(&mut self, ) -> nodes::FuncDecl {
-        if self.current_token != TokenType::Int {
+        if self.current_token != TokenType::Keyword("int".to_string()) {
             panic!("Expected int, got {:?}", self.current_token);
         }
         self.next_token();
@@ -62,7 +62,7 @@ impl Parser {
         }
         self.next_token();
 
-        let mut body: Vec<nodes::Statement> = Vec::new();
+        let mut body: Vec<nodes::BlockItem> = Vec::new();
 
         while self.current_token != TokenType::RBrace {
             let stmt = self.parse_statement();
@@ -75,10 +75,50 @@ impl Parser {
         }
     }
 
-    fn parse_statement(&mut self) -> nodes::Statement {
+    fn parse_statement(&mut self) -> nodes::BlockItem {
         match self.current_token {
-            TokenType::Return => self.parse_return_statement(),
+            TokenType::Keyword(ref keyword) => {
+                match keyword.as_str() {
+                    "return" => nodes::BlockItem::Statement(self.parse_return_statement()),
+                    "int" => nodes::BlockItem::Declaration(self.parse_declaration()),
+                    _ => panic!("Unknown keyword: {:?}", keyword),
+                }
+            },
             _ => panic!("Unknown token: {:?}", self.current_token),
+        }
+    }
+
+    fn parse_declaration(&mut self) -> nodes::Declaration {
+        if self.current_token != TokenType::Keyword("int".to_string()) {
+            panic!("Expected int, got {:?}", self.current_token);
+        }
+        self.next_token();
+
+        let name = match self.current_token {
+            TokenType::Identifier(ref s) => s.clone(),
+            _ => panic!("Expected identifier, got {:?}", self.current_token),
+        };
+        self.next_token();
+
+        if self.current_token == TokenType::Semicolon {
+            self.next_token();
+            nodes::Declaration {
+                name: nodes::Identifier::Var(name),
+                expr: None
+            }
+        } else if self.current_token == TokenType::Equals {
+            self.next_token();
+            let expr = self.parse_expression(0);
+            if self.current_token != TokenType::Semicolon {
+                panic!("Expected semicolon, got {:?}", self.current_token);
+            }
+            self.next_token();
+            nodes::Declaration {
+                name: nodes::Identifier::Var(name),
+                expr: Some(expr)
+            }
+        } else {
+            panic!("Unexpected token: {:?}", self.current_token);
         }
     }
 
@@ -115,6 +155,7 @@ impl Parser {
     fn get_precedence(&self, token: &TokenType) -> i32 {
         match token {
             TokenType::Plus | TokenType::Minus => 50,
+            TokenType::Equals => 1,
             _ => -1,
         }
     }
@@ -133,20 +174,30 @@ impl Parser {
         // dont mind the weird fuckery
         let mut prec: i32;
         while (prec = self.get_precedence(&self.current_token), prec).1 >= min_prec {
-            let op = self.convert_binop(&self.current_token);
-            self.next_token();
-            let right = self.parse_expression(prec + 1);
-            expr = nodes::Expression::Binop(op, Box::new(expr), Box::new(right));
+            if self.current_token == TokenType::Equals {
+                self.next_token();
+                expr = nodes::Expression::Assign(Box::new(expr), Box::new(self.parse_expression(prec)));
+            } else {
+                let op = self.convert_binop(&self.current_token);
+                self.next_token();
+                let right = self.parse_expression(prec + 1);
+                expr = nodes::Expression::Binop(op, Box::new(expr), Box::new(right));
+            }
         }
 
         expr
     }
 
     fn parse_factor(&mut self) -> nodes::Expression {
-        match self.current_token {
+        let cur_tok = self.current_token.clone();
+        match cur_tok {
             TokenType::IntegerLiteral(i) => {
                 self.next_token();
                 nodes::Expression::IntegerLiteral(i)
+            }
+            TokenType::Identifier(ident) => {
+                self.next_token();
+                nodes::Expression::Var(nodes::Identifier::Var(ident.clone()))
             }
             TokenType::Tilde | TokenType::Minus => self.parse_unop(),
             TokenType::LParen => {

@@ -1,13 +1,24 @@
 mod lexer;
 mod parser;
+mod semantic_analysis;
 mod tacky;
 mod code_gen;
 mod emitter;
+
+fn _test_lexer(input: String) {
+    let mut lexer = lexer::Lexer::new(input);
+    let mut current_token = lexer.next_token();
+    while current_token != lexer::TokenType::EOF {
+        println!("{:?}", current_token);
+        current_token = lexer.next_token();
+    }
+}
 
 fn compile(input: String) -> String {
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
+    let program = semantic_analysis::resolve(program);
     let mut tacky = tacky::Tacky::new(program);
     let program = tacky.emit();
     let assembly = code_gen::convert(program);

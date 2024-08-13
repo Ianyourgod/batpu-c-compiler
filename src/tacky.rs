@@ -21,7 +21,7 @@ impl Tacky {
         for func in self.program.statements.clone() {
             let mut body: Vec<definition::Instruction> = Vec::new();
             for instr in &func.body {
-                self.emit_statement(instr, &mut body);
+                self.emit_block_item(instr, &mut body);
             }
 
             let func = definition::FuncDecl {
@@ -37,12 +37,38 @@ impl Tacky {
         }
     }
 
+    fn emit_block_item(&mut self, stmt: &nodes::BlockItem, body: &mut Vec<definition::Instruction>) {
+        match stmt {
+            nodes::BlockItem::Statement(ref inner_stmt) => {
+                self.emit_statement(inner_stmt, body);
+            }
+            nodes::BlockItem::Declaration(ref decl) => {
+                if decl.expr.is_some() {
+                    // this is just assignment
+                    let expr = decl.expr.as_ref().unwrap();
+                    
+                    let val = self.emit_expression(expr, body);
+                    let name = match decl.name {
+                        nodes::Identifier::Var(ref s) => s.clone(),
+                    };
+
+                    body.push(definition::Instruction::Copy(definition::Val::Var(name.clone()), val));
+                }
+                // we don't need to do anything for declarations without an expression
+            }
+        }
+    }
+
     fn emit_statement(&mut self, stmt: &nodes::Statement, body: &mut Vec<definition::Instruction>) {
         match stmt {
             nodes::Statement::Return(ref expr) => {
                 let val = self.emit_expression(expr, body);
                 body.push(definition::Instruction::Return(val));
             }
+            nodes::Statement::Expression(ref expr) => {
+                self.emit_expression(expr, body);
+            }
+            nodes::Statement::Empty => {}
         }
     }
 
@@ -83,6 +109,27 @@ impl Tacky {
                 let tacky_op = self.convert_binop(op);
                 body.push(definition::Instruction::Binary(tacky_op, lhs, rhs, dest.clone()));
                 dest
+            }
+            nodes::Expression::Var(ref s) => {
+                let s = match s {
+                    nodes::Identifier::Var(s) => s.clone(),
+                };
+
+                definition::Val::Var(s)
+            }
+            nodes::Expression::Assign(ref lhs, ref rhs) => {
+                let lhs = match **lhs {
+                    nodes::Expression::Var(ref s) => {
+                        match s {
+                            nodes::Identifier::Var(s) => s.clone(),
+                        }
+                    }
+                    _ => panic!("Invalid assignment target"),
+                };
+
+                let rhs = self.emit_expression(rhs, body);
+                body.push(definition::Instruction::Copy(definition::Val::Var(lhs.clone()), rhs.clone()));
+                definition::Val::Var(lhs)
             }
         }
     }

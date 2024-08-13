@@ -64,6 +64,12 @@ impl ConvertPass {
                     self.convert_val(dst)
                 ));
             },
+            definition::Instruction::Copy(ref dst, ref src) => {
+                instructions.push(assembly::Instruction::Mov(
+                    self.convert_val(src),
+                    self.convert_val(dst)
+                ));
+            },
         }
     }
 

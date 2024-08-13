@@ -1,10 +1,21 @@
 #![allow(dead_code)]
 
+// this macro takes in tuples of the form (String, TokenType). the first tuple is the (0) current char and then (1) what to return if nothing matches
+// for the rest of the tuples, if the current char matches the first element, return the second element
+macro_rules! after_char {
+    ($slf: expr, $ch:expr, $n:expr, $(($c:expr, $t:expr)),*) => {
+        match $ch {
+            $(
+                $c => { $slf.read_char(); $t },
+            )*
+            _ => $n,
+        }
+    };
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
-    // Keywords
-    Int,
-    Return,
+    Keyword(String),
     // Symbols
     LParen,
     RParen,
@@ -18,6 +29,12 @@ pub enum TokenType {
     Star,
     Slash,
     Tilde,
+    // Assignment operators
+    Equals,
+    AddAssign,
+    SubAssign,
+    Increment,
+    Decrement,
     // Literals
     Identifier(String),
     IntegerLiteral(i8),
@@ -72,20 +89,31 @@ impl Lexer {
             '}' => TokenType::RBrace,
             ';' => TokenType::Semicolon,
             ',' => TokenType::Comma,
-            '+' => TokenType::Plus,
-            '-' => TokenType::Minus,
+            '+' => after_char!(self, self.peek_char(),
+                TokenType::Plus,
+                ('=', TokenType::AddAssign),
+                ('+', TokenType::Increment)
+            ),
+            '-' => after_char!(self, self.peek_char(),
+                TokenType::Minus,
+                ('=', TokenType::SubAssign),
+                ('-', TokenType::Decrement)
+            ),
             '*' => TokenType::Star,
             '/' => TokenType::Slash,
             '~' => TokenType::Tilde,
+            '=' => TokenType::Equals,
             '\0' => TokenType::EOF,
             _ => {
                 if is_letter(self.ch) {
                     let ident = self.read_identifier();
-                    return match ident.as_str() {
-                        "int" => TokenType::Int,
-                        "return" => TokenType::Return,
-                        _ => TokenType::Identifier(ident),
-                    };
+
+                    let keywords = vec!["int", "return"];
+                    if keywords.contains(&ident.as_str()) {
+                        return TokenType::Keyword(ident);
+                    } else {
+                        return TokenType::Identifier(ident);
+                    }
                 } else if is_digit(self.ch) {
                     return TokenType::IntegerLiteral(self.read_number());
                 } else {
