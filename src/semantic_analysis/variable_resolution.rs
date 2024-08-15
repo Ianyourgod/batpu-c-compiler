@@ -47,19 +47,7 @@ impl VariableResolution {
 
     fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, body: &mut Vec<nodes::BlockItem>, variable_map: &mut HashMap<nodes::Identifier, String>) {
         match stmt {
-            nodes::BlockItem::Statement(ref inner_stmt) => {
-                match inner_stmt {
-                    nodes::Statement::Return(ref expr) => {
-                        let val = self.resolve_expression(expr, variable_map);
-                        body.push(nodes::BlockItem::Statement(nodes::Statement::Return(val)));
-                    },
-                    nodes::Statement::Expression(ref expr) => {
-                        let val = self.resolve_expression(expr, variable_map);
-                        body.push(nodes::BlockItem::Statement(nodes::Statement::Expression(val)));
-                    },
-                    nodes::Statement::Empty => body.push(stmt.clone()),
-                }
-            },
+            nodes::BlockItem::Statement(ref inner_stmt) => body.push(nodes::BlockItem::Statement(self.resolve_statement(inner_stmt, variable_map))),
             nodes::BlockItem::Declaration(ref decl) => {
                 if variable_map.contains_key(&decl.name) {
                     panic!("Variable {:?} already declared", decl.name);
@@ -80,6 +68,30 @@ impl VariableResolution {
                     }));
                 }
             },
+        }
+    }
+
+    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &HashMap<Identifier, String>) -> nodes::Statement {
+        match stmt {
+            nodes::Statement::Return(ref expr) => {
+                let val = self.resolve_expression(expr, variable_map);
+                nodes::Statement::Return(val)
+            },
+            nodes::Statement::Expression(ref expr) => {
+                let val = self.resolve_expression(expr, variable_map);
+                nodes::Statement::Expression(val)
+            },
+            nodes::Statement::If(ref cond, ref then, ref else_) => {
+                let cond = self.resolve_expression(cond, variable_map);
+                let lft = Box::new(self.resolve_statement(&**then, variable_map));
+                let rht = Box::new(match *else_.clone() {
+                    Some(stmt) => Some(self.resolve_statement(&stmt, variable_map)),
+                    None => None
+                });
+
+                nodes::Statement::If(cond, lft, rht)
+            }
+            nodes::Statement::Empty => stmt.clone(),
         }
     }
 
@@ -115,6 +127,13 @@ impl VariableResolution {
 
                 nodes::Expression::Assign(Box::new(lhs), Box::new(rhs))
             },
+            nodes::Expression::Conditional(ref cond, ref lft, ref rht) => {
+                let cond = Box::new(self.resolve_expression(&**cond, variable_map));
+                let lft = Box::new(self.resolve_expression(&**lft, variable_map));
+                let rht = Box::new(self.resolve_expression(&**rht, variable_map));
+
+                nodes::Expression::Conditional(cond, lft, rht)
+            }
         }
     }
 }

@@ -13,6 +13,7 @@ pub struct FuncDecl {
 pub enum Statement {
     Return(Expression),
     Expression(Expression),
+    If(Expression, Box<Statement>, Box<Option<Statement>>),
     Empty,
 }
 
@@ -40,6 +41,7 @@ pub enum Expression {
     Binop(Binop, Box<Expression>, Box<Expression>),
     Var(Identifier),
     Assign(Box<Expression>, Box<Expression>), // lvalues :scream:
+    Conditional(Box<Expression>, Box<Expression>, Box<Expression>)
 }
 
 #[derive(Debug, Clone)]

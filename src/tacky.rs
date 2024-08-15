@@ -68,6 +68,21 @@ impl Tacky {
             nodes::Statement::Expression(ref expr) => {
                 self.emit_expression(expr, body);
             }
+            nodes::Statement::If(cond, then, else_) => {
+                let end_label = self.make_temporary();
+                let val = self.emit_expression(cond, body);
+                body.push(definition::Instruction::JumpIfZero(val, end_label.clone()));
+                self.emit_statement(then, body);
+                if else_.is_some() {
+                    let actual_end_label = self.make_temporary();
+                    body.push(definition::Instruction::Jump(actual_end_label.clone()));
+                    body.push(definition::Instruction::Label(end_label));
+                    self.emit_statement(&(else_.clone().unwrap()), body);
+                    body.push(definition::Instruction::Label(actual_end_label));
+                    return;
+                }
+                body.push(definition::Instruction::Label(end_label));
+            }
             nodes::Statement::Empty => {}
         }
     }
@@ -177,6 +192,22 @@ impl Tacky {
                 let rhs = self.emit_expression(rhs, body);
                 body.push(definition::Instruction::Copy(definition::Val::Var(lhs.clone()), rhs.clone()));
                 definition::Val::Var(lhs)
+            }
+            nodes::Expression::Conditional(ref cond, ref lft, ref rht) => {
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone());
+                let e2_label = self.make_temporary();
+                let end_label = self.make_temporary();
+                let cond = self.emit_expression(cond, body);
+                body.push(definition::Instruction::JumpIfZero(cond, e2_label.clone()));
+                let v1 = self.emit_expression(lft, body);
+                body.push(definition::Instruction::Copy(dest.clone(), v1));
+                body.push(definition::Instruction::Jump(end_label.clone()));
+                body.push(definition::Instruction::Label(e2_label));
+                let v2 = self.emit_expression(rht, body);
+                body.push(definition::Instruction::Copy(dest.clone(), v2));
+                body.push(definition::Instruction::Label(end_label));
+                dest
             }
         }
     }

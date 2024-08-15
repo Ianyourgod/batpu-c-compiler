@@ -21,6 +21,14 @@ impl Parser {
         self.current_token = self.lexer.next_token();
     }
 
+    fn consume(&mut self, expects: TokenType) {
+        if self.current_token != expects {
+            panic!("Expected {:?}, found {:?}", expects, self.current_token);
+        }
+        
+        self.current_token = self.lexer.next_token();
+    }
+
     pub fn parse_program(&mut self) -> nodes::Program {
         let mut program = nodes::Program {
             statements: Vec::new(),
@@ -65,7 +73,7 @@ impl Parser {
         let mut body: Vec<nodes::BlockItem> = Vec::new();
 
         while self.current_token != TokenType::RBrace {
-            let stmt = self.parse_statement();
+            let stmt = self.parse_block_item();
             body.push(stmt);
         }
 
@@ -75,16 +83,32 @@ impl Parser {
         }
     }
 
-    fn parse_statement(&mut self) -> nodes::BlockItem {
+    fn parse_block_item(&mut self) -> nodes::BlockItem {
         match self.current_token {
             TokenType::Keyword(ref keyword) => {
                 match keyword.as_str() {
-                    "return" => nodes::BlockItem::Statement(self.parse_return_statement()),
                     "int" => nodes::BlockItem::Declaration(self.parse_declaration()),
-                    _ => panic!("Unknown keyword: {:?}", keyword),
+                    _ => nodes::BlockItem::Statement(self.parse_statement())
                 }
             },
             _ => panic!("Unknown token: {:?}", self.current_token),
+        }
+    }
+
+    fn parse_statement(&mut self) -> nodes::Statement {
+        match self.current_token {
+            TokenType::Keyword(ref keyword) => {
+                match keyword.as_str() {
+                    "return" => self.parse_return_statement(),
+                    "if" => self.parse_if_statement(),
+                    _ => panic!("Unknown keyword: {:?}", keyword),
+                }
+            },
+            _ => {
+                let expr = nodes::Statement::Expression(self.parse_expression(0));
+                self.consume(TokenType::Semicolon);
+                expr
+            },
         }
     }
 
@@ -120,6 +144,28 @@ impl Parser {
         } else {
             panic!("Unexpected token: {:?}", self.current_token);
         }
+    }
+
+    fn parse_if_statement(&mut self) -> nodes::Statement {
+        self.consume(TokenType::Keyword("if".to_string()));
+
+        self.consume(TokenType::LParen);
+
+        let cond = self.parse_expression(0);
+
+        self.consume(TokenType::RParen);
+
+        let then = self.parse_statement();
+
+        let else_ = if self.current_token == TokenType::Keyword("else".to_string()) {
+            self.next_token();
+
+            Some(self.parse_statement())
+        } else {
+            None
+        };
+
+        nodes::Statement::If(cond, Box::new(then), Box::new(else_))
     }
 
     fn parse_return_statement(&mut self) -> nodes::Statement {
@@ -166,6 +212,7 @@ impl Parser {
             TokenType::Equal | TokenType::NotEqual => 30,
             TokenType::LogicalAnd => 25,
             TokenType::LogicalOr => 20,
+            TokenType::QuestionMark => 5,
             TokenType::Equals |
             TokenType::AddAssign | TokenType::SubAssign => 1,
             _ => -1,
@@ -197,6 +244,12 @@ impl Parser {
             if self.current_token == TokenType::Equals {
                 self.next_token();
                 expr = nodes::Expression::Assign(Box::new(expr), Box::new(self.parse_expression(prec)));
+            } else if self.current_token == TokenType::QuestionMark {
+                self.next_token();
+                let middle = self.parse_expression(0);
+                self.consume(TokenType::Colon);
+                let right = self.parse_expression(prec);
+                expr = nodes::Expression::Conditional(Box::new(expr), Box::new(middle), Box::new(right));
             } else {
                 let op = self.convert_binop(&self.current_token);
                 self.next_token();

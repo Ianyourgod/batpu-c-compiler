@@ -29,6 +29,8 @@ pub enum TokenType {
     Star,
     Slash,
     Tilde,
+    QuestionMark,
+    Colon,
     // Assignment operators
     Equals,
     AddAssign,
@@ -114,7 +116,10 @@ impl Lexer {
             '*' => TokenType::Star,
             '/' => TokenType::Slash,
             '~' => TokenType::Tilde,
-            '=' => TokenType::Equals,
+            '=' => after_char!(self, self.peek_char(),
+                TokenType::Equals,
+                ('=', TokenType::Equal)
+            ),
             '!' => after_char!(self, self.peek_char(),
                 TokenType::LogicalNot,
                 ('=', TokenType::NotEqual)
@@ -135,12 +140,14 @@ impl Lexer {
                 TokenType::GreaterThan,
                 ('=', TokenType::GreaterThanEqual)
             ),
+            '?' => TokenType::QuestionMark,
+            ':' => TokenType::Colon,
             '\0' => TokenType::EOF,
             _ => {
                 if is_letter(self.ch) {
                     let ident = self.read_identifier();
 
-                    let keywords = vec!["int", "return"];
+                    let keywords = vec!["int", "return", "if", "else"];
                     if keywords.contains(&ident.as_str()) {
                         return TokenType::Keyword(ident);
                     } else {
