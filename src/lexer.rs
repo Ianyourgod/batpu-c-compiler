@@ -35,11 +35,23 @@ pub enum TokenType {
     SubAssign,
     Increment,
     Decrement,
+    // Logical & Relational operators
+    LogicalNot,
+    LogicalAnd,
+    LogicalOr,
+    Equal,
+    NotEqual,
+    LessThan,
+    GreaterThan,
+    LessThanEqual,
+    GreaterThanEqual,
     // Literals
     Identifier(String),
     IntegerLiteral(i8),
     // End of file
     EOF,
+    // Error
+    Illegal,
 }
 
 pub struct Lexer {
@@ -103,6 +115,26 @@ impl Lexer {
             '/' => TokenType::Slash,
             '~' => TokenType::Tilde,
             '=' => TokenType::Equals,
+            '!' => after_char!(self, self.peek_char(),
+                TokenType::LogicalNot,
+                ('=', TokenType::NotEqual)
+            ),
+            '&' => after_char!(self, self.peek_char(),
+                TokenType::Illegal,
+                ('&', TokenType::LogicalAnd)
+            ),
+            '|' => after_char!(self, self.peek_char(),
+                TokenType::Illegal,
+                ('|', TokenType::LogicalOr)
+            ),
+            '<' => after_char!(self, self.peek_char(),
+                TokenType::LessThan,
+                ('=', TokenType::LessThanEqual)
+            ),
+            '>' => after_char!(self, self.peek_char(),
+                TokenType::GreaterThan,
+                ('=', TokenType::GreaterThanEqual)
+            ),
             '\0' => TokenType::EOF,
             _ => {
                 if is_letter(self.ch) {

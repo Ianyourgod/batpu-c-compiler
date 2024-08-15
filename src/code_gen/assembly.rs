@@ -10,14 +10,26 @@ pub struct FuncDecl {
 }
 
 #[derive(Debug, Clone)]
+pub enum CondCode {
+    Equal,
+    NotEqual,
+    GreaterThanEqual,
+    LessThan,
+}
+
+#[derive(Debug, Clone)]
 pub enum Instruction {
     Mov(Operand, Operand),
     Ldi(Operand, i8),
     Unary(Unop, Operand, Operand),
     Binary(Binop, Operand, Operand, Operand),
+    Cmp(Operand, Operand),
     AllocateStack(u8),
     Lod(Register, i16, Register),
     Str(Register, i16, Register),
+    Jmp(String),
+    JmpCC(CondCode, String),
+    Label(String),
     Return,
 }
 
@@ -39,6 +51,7 @@ pub enum Operand {
 pub enum Binop {
     Add,
     Subtract,
+    Nor,
 }
 
 #[derive(Debug, Clone)]

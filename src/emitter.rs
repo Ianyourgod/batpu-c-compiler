@@ -69,6 +69,16 @@ hlt
         match op {
             assembly::Binop::Add => "add",
             assembly::Binop::Subtract => "sub",
+            assembly::Binop::Nor => "nor",
+        }.to_string()
+    }
+
+    fn cond(&self, cond: &assembly::CondCode) -> String {
+        match cond {
+            assembly::CondCode::Equal => "EQ",
+            assembly::CondCode::NotEqual => "NE",
+            assembly::CondCode::GreaterThanEqual => "GE",
+            assembly::CondCode::LessThan => "LT",
         }.to_string()
     }
 
@@ -101,6 +111,20 @@ hlt
             }
             assembly::Instruction::Str(ref src, i, ref dst) => {
                 format!("str {} {} -{}", self.emit_register(src), self.emit_register(dst), i)
+            }
+            assembly::Instruction::Jmp(lbl) => {
+                format!("jmp .{}", lbl)
+            }
+            assembly::Instruction::JmpCC(cond, lbl) => {
+                format!("brh {} .{}", self.cond(cond), lbl)
+            }
+            assembly::Instruction::Cmp(ref src1, ref src2) => {
+                format!("cmp {} {}",
+                    self.emit_operand(src1),
+                    self.emit_operand(src2))
+            }
+            assembly::Instruction::Label(ref lbl) => {
+                format!(".{}", lbl)
             }
         }
     }

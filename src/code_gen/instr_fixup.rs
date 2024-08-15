@@ -185,7 +185,35 @@ impl InstructionFixupPass {
                     }
                 }
             },
-            _ => instructions.push(stmt.clone()),
+            assembly::Instruction::Cmp(ref lft, ref rht) => {
+                let (is_src1_reg, src1_reg) = self.is_register(lft);
+                let (is_src2_reg, src2_reg) = self.is_register(rht);
+
+                if is_src1_reg && is_src2_reg {
+                    instructions.push(stmt.clone());
+                    return;
+                }
+
+                let src1_reg = if is_src1_reg { src1_reg } else { assembly::Register::new("r10".to_string()) };
+                let src2_reg = if is_src2_reg { src2_reg } else { assembly::Register::new("r11".to_string()) };
+
+                if !is_src1_reg { self.to_register(lft, &src1_reg, instructions) };
+                if !is_src2_reg { self.to_register(rht, &src2_reg, instructions) };
+
+                instructions.push(assembly::Instruction::Cmp(
+                    assembly::Operand::Register(src1_reg),
+                    assembly::Operand::Register(src2_reg),
+                ));
+            }
+            assembly::Instruction::Ldi(_, _) |
+            assembly::Instruction::AllocateStack(_) |
+            assembly::Instruction::Lod(_, _, _) |
+            assembly::Instruction::Str(_, _, _) |
+            assembly::Instruction::Jmp(_) |
+            assembly::Instruction::JmpCC(_, _) |
+            assembly::Instruction::Label(_) |
+            assembly::Instruction::Return => instructions.push(stmt.clone()),
+            //d_ => instructions.push(stmt.clone()),
         }
     }
 }

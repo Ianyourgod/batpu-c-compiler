@@ -82,6 +82,22 @@ impl Tacky {
         match op {
             nodes::Binop::Add => definition::Binop::Add,
             nodes::Binop::Subtract => definition::Binop::Subtract,
+            nodes::Binop::And => definition::Binop::And,
+            nodes::Binop::Or => definition::Binop::Or,
+            nodes::Binop::Equal => definition::Binop::Equal,
+            nodes::Binop::NotEqual => definition::Binop::NotEqual,
+            nodes::Binop::LessThan => definition::Binop::LessThan,
+            nodes::Binop::GreaterThan => definition::Binop::GreaterThan,
+            nodes::Binop::LessThanEqual => definition::Binop::LessThanEqual,
+            nodes::Binop::GreaterThanEqual => definition::Binop::GreaterThanEqual,
+        }
+    }
+
+    fn is_short_circuiting(&self, op: &nodes::Binop) -> (bool, bool) {
+        match op {
+            nodes::Binop::And => (true, false),
+            nodes::Binop::Or => (true, true),
+            _ => (false, false),
         }
     }
 
@@ -97,16 +113,47 @@ impl Tacky {
                 let tacky_op = match op {
                     nodes::Unop::Negate => definition::Unop::Negate,
                     nodes::Unop::BitwiseNot => definition::Unop::BitwiseNot,
+                    nodes::Unop::LogicalNot => definition::Unop::LogicalNot,
                 };
                 body.push(definition::Instruction::Unary(tacky_op, src, dest.clone()));
                 dest
             }
             nodes::Expression::Binop(op, ref lft, ref rht) => {
-                let lhs = self.emit_expression(lft, body);
-                let rhs = self.emit_expression(rht, body);
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone());
                 let tacky_op = self.convert_binop(op);
+
+                let sh_circ = self.is_short_circuiting(op);
+                if sh_circ.0 {
+                    let short_circuit_label = self.make_temporary();
+                    let short_circuit_end_label = self.make_temporary();
+
+                    let lhs = self.emit_expression(lft, body);
+
+                    let sh_circ_val = if !sh_circ.1 {
+                        body.push(definition::Instruction::JumpIfZero(lhs.clone(), short_circuit_label.clone()));
+                        let rhs = self.emit_expression(rht, body);
+                        body.push(definition::Instruction::JumpIfZero(rhs.clone(), short_circuit_label.clone()));
+                        true
+                    } else {
+                        body.push(definition::Instruction::JumpIfNotZero(lhs.clone(), short_circuit_label.clone()));
+                        let rhs = self.emit_expression(rht, body);
+                        body.push(definition::Instruction::JumpIfNotZero(rhs.clone(), short_circuit_label.clone()));
+                        false
+                    };
+
+                    body.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(sh_circ_val as i8)));
+                    body.push(definition::Instruction::Jump(short_circuit_end_label.clone()));
+                    body.push(definition::Instruction::Label(short_circuit_label.clone()));
+                    body.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const((!sh_circ_val) as i8)));
+                    body.push(definition::Instruction::Label(short_circuit_end_label.clone()));
+
+                    return dest;
+                }
+
+                let lhs = self.emit_expression(lft, body);
+                let rhs = self.emit_expression(rht, body);
+
                 body.push(definition::Instruction::Binary(tacky_op, lhs, rhs, dest.clone()));
                 dest
             }

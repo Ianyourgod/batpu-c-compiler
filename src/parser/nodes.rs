@@ -46,10 +46,19 @@ pub enum Expression {
 pub enum Unop {
     Negate,
     BitwiseNot,
+    LogicalNot,
 }
 
 #[derive(Debug, Clone)]
 pub enum Binop {
     Add,
     Subtract,
+    And,
+    Or,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanEqual,
+    GreaterThan,
+    GreaterThanEqual,
 }

@@ -70,10 +70,19 @@ impl PsuedoReplacePass {
 
                 instructions.push(assembly::Instruction::Ldi(dst, imm.clone()));
             },
+            assembly::Instruction::Cmp(ref src1, ref src2) => {
+                let src1 = self.emit_operand(src1);
+                let src2 = self.emit_operand(src2);
+
+                instructions.push(assembly::Instruction::Cmp(src1, src2));
+            }
             assembly::Instruction::Return |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Lod(_, _, _) |
-            assembly::Instruction::Str(_, _, _) => instructions.push(stmt.clone()),
+            assembly::Instruction::Str(_, _, _) |
+            assembly::Instruction::Jmp(_) |
+            assembly::Instruction::JmpCC(_, _) |
+            assembly::Instruction::Label(_) => instructions.push(stmt.clone()),
         }
     }
 

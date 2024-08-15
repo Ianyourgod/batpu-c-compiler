@@ -148,14 +148,26 @@ impl Parser {
                 let expr = self.parse_factor();
                 nodes::Expression::Unop(nodes::Unop::Negate, Box::new(expr))
             }
+            TokenType::LogicalNot => {
+                self.next_token();
+                let expr = self.parse_factor();
+                nodes::Expression::Unop(nodes::Unop::LogicalNot, Box::new(expr))
+            }
             _ => panic!("Unknown token: {:?}", self.current_token),
         }
     }
 
     fn get_precedence(&self, token: &TokenType) -> i32 {
         match token {
-            TokenType::Plus | TokenType::Minus => 50,
-            TokenType::Equals => 1,
+            TokenType::Increment | TokenType::Decrement => 50,
+            TokenType::Plus | TokenType::Minus => 45,
+            TokenType::LessThan | TokenType::GreaterThan |
+            TokenType::LessThanEqual | TokenType::GreaterThanEqual => 35,
+            TokenType::Equal | TokenType::NotEqual => 30,
+            TokenType::LogicalAnd => 25,
+            TokenType::LogicalOr => 20,
+            TokenType::Equals |
+            TokenType::AddAssign | TokenType::SubAssign => 1,
             _ => -1,
         }
     }
@@ -164,6 +176,14 @@ impl Parser {
         match token {
             TokenType::Plus => nodes::Binop::Add,
             TokenType::Minus => nodes::Binop::Subtract,
+            TokenType::LogicalAnd => nodes::Binop::And,
+            TokenType::LogicalOr => nodes::Binop::Or,
+            TokenType::Equal => nodes::Binop::Equal,
+            TokenType::NotEqual => nodes::Binop::NotEqual,
+            TokenType::LessThan => nodes::Binop::LessThan,
+            TokenType::GreaterThan => nodes::Binop::GreaterThan,
+            TokenType::LessThanEqual => nodes::Binop::LessThanEqual,
+            TokenType::GreaterThanEqual => nodes::Binop::GreaterThanEqual,
             _ => panic!("Unknown token: {:?}", token),
         }
     }
@@ -199,7 +219,8 @@ impl Parser {
                 self.next_token();
                 nodes::Expression::Var(nodes::Identifier::Var(ident.clone()))
             }
-            TokenType::Tilde | TokenType::Minus => self.parse_unop(),
+            TokenType::Tilde | TokenType::Minus |
+            TokenType::LogicalNot => self.parse_unop(),
             TokenType::LParen => {
                 self.next_token();
                 let expr = self.parse_expression(0);

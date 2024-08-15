@@ -15,22 +15,42 @@ hlt
     str r14 r15 0
     adi r14 -1
     mov r14 r15
-    adi r14 -4
-    ldi r10 1
-    ldi r11 2
-    add r10 r11 r12
-    str r15 r12 -1
+    adi r14 -7
+    ldi r10 3
+    mov r10 r11
+    str r15 r11 -1
     lod r15 r10 -1
-    mov r10 r11
-    str r15 r11 -2
-    lod r15 r10 -2
-    ldi r11 4
+    ldi r11 3
     sub r10 r11 r12
-    str r15 r12 -3
-    lod r15 r10 -3
+    str r15 r12 -2
+    lod r15 r10 -2
     mov r10 r11
-    str r15 r11 -4
+    str r15 r11 -3
+    lod r15 r10 -1
+    lod r15 r11 -3
+    add r10 r11 r12
+    str r15 r12 -4
     lod r15 r10 -4
+    ldi r11 5
+    sub r10 r11 r12
+    str r15 r12 -5
+    lod r15 r10 -5
+    mov r10 r11
+    str r15 r11 -6
+    lod r15 r10 -1
+    lod r15 r11 -6
+    cmp r10 r11
+    brh LT .cL.true.0
+    ldi r10 0
+    mov r10 r11
+    str r15 r11 -7
+    jmp .cL.end.1
+    .cL.true.0
+    ldi r10 1
+    mov r10 r11
+    str r15 r11 -7
+    .cL.end.1
+    lod r15 r10 -7
     mov r10 r1
     mov r15 r14
     lod r14 r15 0
