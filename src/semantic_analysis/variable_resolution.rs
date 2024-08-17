@@ -23,7 +23,7 @@ impl VariableResolution {
             let mut body: Vec<nodes::BlockItem> = Vec::new();
             let mut variable_map: HashMap<nodes::Identifier, String> = HashMap::new();
             for instr in &func.body {
-                self.resolve_block_item(instr, &mut body, &mut variable_map);
+                body.push(self.resolve_block_item(instr, &mut variable_map));
             }
 
             let func = nodes::FuncDecl {
@@ -45,9 +45,9 @@ impl VariableResolution {
         name
     }
 
-    fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, body: &mut Vec<nodes::BlockItem>, variable_map: &mut HashMap<nodes::Identifier, String>) {
+    fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, variable_map: &mut HashMap<nodes::Identifier, String>) -> nodes::BlockItem {
         match stmt {
-            nodes::BlockItem::Statement(ref inner_stmt) => body.push(nodes::BlockItem::Statement(self.resolve_statement(inner_stmt, variable_map))),
+            nodes::BlockItem::Statement(ref inner_stmt) => nodes::BlockItem::Statement(self.resolve_statement(inner_stmt, variable_map)),
             nodes::BlockItem::Declaration(ref decl) => {
                 if variable_map.contains_key(&decl.name) {
                     panic!("Variable {:?} already declared", decl.name);
@@ -62,16 +62,18 @@ impl VariableResolution {
                 if decl.expr.is_some() {
                     let expr = decl.expr.as_ref().unwrap();
                     let val = self.resolve_expression(expr, variable_map);
-                    body.push(nodes::BlockItem::Declaration(nodes::Declaration {
+                    nodes::BlockItem::Declaration(nodes::Declaration {
                         name: nodes::Identifier::Var(unique_name),
                         expr: Some(val),
-                    }));
+                    })
+                } else {
+                    nodes::BlockItem::Statement(nodes::Statement::Empty)
                 }
             },
         }
     }
 
-    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &HashMap<Identifier, String>) -> nodes::Statement {
+    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &mut HashMap<Identifier, String>) -> nodes::Statement {
         match stmt {
             nodes::Statement::Return(ref expr) => {
                 let val = self.resolve_expression(expr, variable_map);
@@ -90,6 +92,10 @@ impl VariableResolution {
                 });
 
                 nodes::Statement::If(cond, lft, rht)
+            },
+            nodes::Statement::Compound(ref stmts) => {
+                let mut new_var_map = variable_map.clone();
+                nodes::Statement::Compound(stmts.iter().map(|stmt| self.resolve_block_item(stmt, &mut new_var_map)).collect())
             }
             nodes::Statement::Empty => stmt.clone(),
         }

@@ -147,7 +147,7 @@ impl Lexer {
                 if is_letter(self.ch) {
                     let ident = self.read_identifier();
 
-                    let keywords = vec!["int", "return", "if", "else"];
+                    let keywords = vec!["int", "return", "if", "else", "while", "for", "do", "break", "continue"];
                     if keywords.contains(&ident.as_str()) {
                         return TokenType::Keyword(ident);
                     } else {

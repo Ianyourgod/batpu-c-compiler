@@ -91,7 +91,7 @@ impl Parser {
                     _ => nodes::BlockItem::Statement(self.parse_statement())
                 }
             },
-            _ => panic!("Unknown token: {:?}", self.current_token),
+            _ => nodes::BlockItem::Statement(self.parse_statement())
         }
     }
 
@@ -104,6 +104,21 @@ impl Parser {
                     _ => panic!("Unknown keyword: {:?}", keyword),
                 }
             },
+            TokenType::LBrace => {
+                self.next_token();
+                let mut stmts: Vec<nodes::BlockItem> = Vec::new();
+
+                while self.current_token != TokenType::RBrace {
+                    stmts.push(self.parse_block_item());
+                    if self.current_token == TokenType::EOF {
+                        panic!("Expected '}}', found EOF");
+                    }
+                }
+
+                self.next_token();
+
+                nodes::Statement::Compound(stmts)
+            }
             _ => {
                 let expr = nodes::Statement::Expression(self.parse_expression(0));
                 self.consume(TokenType::Semicolon);

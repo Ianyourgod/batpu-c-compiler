@@ -14,6 +14,7 @@ pub enum Statement {
     Return(Expression),
     Expression(Expression),
     If(Expression, Box<Statement>, Box<Option<Statement>>),
+    Compound(Vec<BlockItem>),
     Empty,
 }
 

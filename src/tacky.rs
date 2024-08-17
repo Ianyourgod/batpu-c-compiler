@@ -83,6 +83,11 @@ impl Tacky {
                 }
                 body.push(definition::Instruction::Label(end_label));
             }
+            nodes::Statement::Compound(stmts) => {
+                for stmt in stmts {
+                    self.emit_block_item(stmt, body);
+                }
+            }
             nodes::Statement::Empty => {}
         }
     }

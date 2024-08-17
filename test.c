@@ -1,4 +1,7 @@
 int main() {
-    int switcheroo = 1;
-    return switcheroo ? 5 : 6;
+    int a = 1;
+    if (1) {
+        int b = 2;
+    }
+    return a;
 }
