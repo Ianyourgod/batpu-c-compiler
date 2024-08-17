@@ -205,6 +205,25 @@ impl InstructionFixupPass {
                     assembly::Operand::Register(src2_reg),
                 ));
             }
+            assembly::Instruction::Adi(ref op, i) => {
+                let (is_stack, offset) = self.is_stack(op);
+
+                if !is_stack {
+                    instructions.push(stmt.clone());
+                    return;
+                }
+
+                let reg = assembly::Register::new("r10".to_string());
+
+                self.to_register(op, &reg, instructions);
+
+                instructions.push(assembly::Instruction::Adi(
+                    assembly::Operand::Register(reg.clone()),
+                    i.clone()
+                ));
+
+                instructions.push(assembly::Instruction::Str(assembly::Register::new("rbp".to_string()), offset, reg));
+            },
             assembly::Instruction::Ldi(_, _) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Lod(_, _, _) |

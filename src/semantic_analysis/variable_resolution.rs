@@ -1,7 +1,6 @@
-use core::panic;
 use std::collections::HashMap;
 
-use crate::parser::nodes::{self, Identifier};
+use crate::parser::nodes;
 
 pub struct VariableResolution {
     program: nodes::Program,
@@ -73,7 +72,7 @@ impl VariableResolution {
         }
     }
 
-    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &mut HashMap<Identifier, String>) -> nodes::Statement {
+    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &mut HashMap<nodes::Identifier, String>) -> nodes::Statement {
         match stmt {
             nodes::Statement::Return(ref expr) => {
                 let val = self.resolve_expression(expr, variable_map);
@@ -97,11 +96,66 @@ impl VariableResolution {
                 let mut new_var_map = variable_map.clone();
                 nodes::Statement::Compound(stmts.iter().map(|stmt| self.resolve_block_item(stmt, &mut new_var_map)).collect())
             }
+            nodes::Statement::Break(_) => stmt.clone(),
+            nodes::Statement::Continue(_) => stmt.clone(),
+            nodes::Statement::While(ref cond, ref body, _) => {
+                let cond = self.resolve_expression(cond, variable_map);
+                let body = Box::new(self.resolve_statement(&**body, variable_map));
+
+                nodes::Statement::While(cond, body, String::new())
+            },
+            nodes::Statement::DoWhile(ref body, ref cond, _) => {
+                let body = Box::new(self.resolve_statement(&**body, variable_map));
+                let cond = self.resolve_expression(cond, variable_map);
+
+                nodes::Statement::DoWhile(body, cond, String::new())
+            },
+            nodes::Statement::For(ref init, ref cond, ref post, ref body, _) => {
+                let init = match init {
+                    nodes::ForInit::Declaration(ref decl) => {
+                        let decl = nodes::Declaration {
+                            name: decl.name.clone(),
+                            expr: match decl.expr {
+                                Some(ref expr) => Some(self.resolve_expression(expr, variable_map)),
+                                None => None,
+                            },
+                        };
+                        variable_map.insert(decl.name.clone(), match decl.name { nodes::Identifier::Var(ref s) => s.clone() });
+                        nodes::ForInit::Declaration(decl)
+                    },
+                    nodes::ForInit::Expression(ref expr) => {
+                        let expr = self.resolve_expression(expr, variable_map);
+                        nodes::ForInit::Expression(expr)
+                    },
+                    nodes::ForInit::Empty => nodes::ForInit::Empty,
+                };
+
+                let cond = match cond {
+                    Some(ref expr) => Some(self.resolve_expression(expr, variable_map)),
+                    None => None,
+                };
+
+                let post = match post {
+                    Some(ref expr) => Some(self.resolve_expression(expr, variable_map)),
+                    None => None,
+                };
+
+                let body = Box::new(self.resolve_statement(&**body, variable_map));
+
+                nodes::Statement::For(init, cond, post, body, String::new())
+            },
             nodes::Statement::Empty => stmt.clone(),
         }
     }
 
-    fn resolve_expression(&mut self, expr: &nodes::Expression, variable_map: &HashMap<Identifier, String>) -> nodes::Expression {
+    fn is_valid_lvalue(&self, expr: &nodes::Expression) -> bool {
+        match expr {
+            nodes::Expression::Var(_) => true,
+            _ => false,
+        }
+    }
+
+    fn resolve_expression(&mut self, expr: &nodes::Expression, variable_map: &HashMap<nodes::Identifier, String>) -> nodes::Expression {
         match expr {
             nodes::Expression::Binop(ref op, ref src1, ref src2) => {
                 let src1 = self.resolve_expression(src1, variable_map);
@@ -123,9 +177,8 @@ impl VariableResolution {
                 }
             },
             nodes::Expression::Assign(ref lhs, ref rhs) => {
-                match **lhs {
-                    nodes::Expression::Var(_) => {}
-                    _ => panic!("Invalid lvalue"),
+                if !self.is_valid_lvalue(&**lhs) {
+                    panic!("Invalid lvalue");
                 }
 
                 let lhs = self.resolve_expression(lhs, variable_map);
@@ -139,7 +192,25 @@ impl VariableResolution {
                 let rht = Box::new(self.resolve_expression(&**rht, variable_map));
 
                 nodes::Expression::Conditional(cond, lft, rht)
-            }
+            },
+            nodes::Expression::Increment(ref expr) => {
+                if !self.is_valid_lvalue(&**expr) {
+                    panic!("Invalid lvalue");
+                }
+
+                let expr = self.resolve_expression(expr, variable_map);
+
+                nodes::Expression::Increment(Box::new(expr))
+            },
+            nodes::Expression::Decrement(ref expr) => {
+                if !self.is_valid_lvalue(&**expr) {
+                    panic!("Invalid lvalue");
+                }
+
+                let expr = self.resolve_expression(expr, variable_map);
+
+                nodes::Expression::Decrement(Box::new(expr))
+            },
         }
     }
 }

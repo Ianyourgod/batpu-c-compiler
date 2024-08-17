@@ -8,6 +8,7 @@ pub struct ConvertPass {
 
 impl ConvertPass {
     pub fn new(program: definition::Program) -> ConvertPass {
+        //println!("{:#?}", program);
         ConvertPass {
             program,
             tmp_counter: 0,
@@ -92,15 +93,28 @@ impl ConvertPass {
                 instructions.push(assembly::Instruction::Return);
             },
             definition::Instruction::Unary(ref op, ref src, ref dst) => {
-                if match op { definition::Unop::LogicalNot => true, _ => false } {
-                    let src_converted = self.convert_val(src);
-                    instructions.push(assembly::Instruction::Binary(
-                        assembly::Binop::Nor,
-                        src_converted.clone(),
-                        src_converted,
-                        self.convert_val(dst),
-                    ));
-                    return;
+                match op {
+                    definition::Unop::LogicalNot => {
+                        let src_converted = self.convert_val(src);
+                        instructions.push(assembly::Instruction::Binary(
+                            assembly::Binop::Nor,
+                            src_converted.clone(),
+                            src_converted,
+                            self.convert_val(dst),
+                        ));
+                        return;
+                    }
+                    definition::Unop::AddImm => {
+                        instructions.push(assembly::Instruction::Adi(
+                            self.convert_val(dst),
+                            match src {
+                                definition::Val::Const(i) => *i,
+                                _ => unreachable!(),
+                            }
+                        ));
+                        return;
+                    }
+                    _ => (),
                 }
 
                 instructions.push(assembly::Instruction::Unary(
@@ -172,7 +186,7 @@ impl ConvertPass {
         match op {
             definition::Unop::Negate => assembly::Unop::Negate,
             definition::Unop::BitwiseNot => assembly::Unop::BitwiseNot,
-            definition::Unop::LogicalNot => unreachable!(),
+            definition::Unop::LogicalNot | definition::Unop::AddImm => unreachable!(),
         }
     }
 

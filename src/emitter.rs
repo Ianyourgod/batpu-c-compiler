@@ -9,6 +9,7 @@ pub struct Emitter {
 
 impl Emitter {
     pub fn new(program: assembly::Program) -> Emitter {
+        //println!("{:#?}", program);
         Emitter {
             program,
         }
@@ -105,6 +106,9 @@ hlt
             }
             assembly::Instruction::AllocateStack(i) => {
                 format!("adi r14 -{}", i)
+            }
+            assembly::Instruction::Adi(ref reg, i) => {
+                format!("adi {} {}", self.emit_operand(reg), i)
             }
             assembly::Instruction::Lod(ref src, i, ref dst) => {
                 format!("lod {} {} -{}", self.emit_register(src), self.emit_register(dst), i)

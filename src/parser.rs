@@ -101,6 +101,19 @@ impl Parser {
                 match keyword.as_str() {
                     "return" => self.parse_return_statement(),
                     "if" => self.parse_if_statement(),
+                    "while" => self.parse_while_statement(),
+                    "do" => self.parse_do_while(),
+                    "for" => self.parse_for_loop(),
+                    "break" => {
+                        self.next_token();
+                        self.consume(TokenType::Semicolon);
+                        nodes::Statement::Break("".to_string())
+                    },
+                    "continue" => {
+                        self.next_token();
+                        self.consume(TokenType::Semicolon);
+                        nodes::Statement::Continue("".to_string())
+                    },
                     _ => panic!("Unknown keyword: {:?}", keyword),
                 }
             },
@@ -119,6 +132,10 @@ impl Parser {
 
                 nodes::Statement::Compound(stmts)
             }
+            TokenType::Semicolon => {
+                self.next_token();
+                nodes::Statement::Empty
+            },
             _ => {
                 let expr = nodes::Statement::Expression(self.parse_expression(0));
                 self.consume(TokenType::Semicolon);
@@ -181,6 +198,75 @@ impl Parser {
         };
 
         nodes::Statement::If(cond, Box::new(then), Box::new(else_))
+    }
+
+    fn parse_while_statement(&mut self) -> nodes::Statement {
+        self.next_token();
+
+        self.consume(TokenType::LParen);
+
+        let cond = self.parse_expression(0);
+
+        self.consume(TokenType::RParen);
+
+        let stmt = self.parse_statement();
+
+        nodes::Statement::While(cond, Box::new(stmt), "".to_string())
+    }
+
+    fn parse_do_while(&mut self) -> nodes::Statement {
+        self.next_token();
+
+        let stmt = self.parse_statement();
+
+        self.consume(TokenType::Keyword("while".to_string()));
+        self.consume(TokenType::LParen);
+
+        let cond = self.parse_expression(0);
+
+        self.consume(TokenType::RParen);
+        self.consume(TokenType::Semicolon);
+
+        nodes::Statement::DoWhile(Box::new(stmt), cond, "".to_string())
+    }
+
+    fn parse_for_loop(&mut self) -> nodes::Statement {
+        self.next_token();
+
+        self.consume(TokenType::LParen);
+
+        // parse forinit
+        let for_init = if self.current_token == TokenType::Semicolon {
+            nodes::ForInit::Empty
+        } else if self.current_token == TokenType::Keyword("int".to_string()) {
+            let decl = self.parse_declaration(); // consumes semicolon
+            nodes::ForInit::Declaration(decl)
+        } else {
+            let expr = self.parse_expression(0);
+            self.consume(TokenType::Semicolon);
+            nodes::ForInit::Expression(expr)
+        };
+
+        let condition = if self.current_token == TokenType::Semicolon {
+            None
+        } else {
+            Some(self.parse_expression(0))
+        };
+    
+        self.consume(TokenType::Semicolon);
+    
+        // Parse increment
+        let increment = if self.current_token == TokenType::RParen {
+            None
+        } else {
+            Some(self.parse_expression(0))
+        };
+
+        self.consume(TokenType::RParen);
+
+        let stmt = self.parse_statement();
+
+        nodes::Statement::For(for_init, condition, increment, Box::new(stmt), "".to_string())
     }
 
     fn parse_return_statement(&mut self) -> nodes::Statement {
@@ -265,6 +351,13 @@ impl Parser {
                 self.consume(TokenType::Colon);
                 let right = self.parse_expression(prec);
                 expr = nodes::Expression::Conditional(Box::new(expr), Box::new(middle), Box::new(right));
+            } else if self.current_token == TokenType::Increment || self.current_token == TokenType::Decrement {
+                if self.current_token == TokenType::Increment {
+                    expr = nodes::Expression::Increment(Box::new(expr));
+                } else {
+                    expr = nodes::Expression::Decrement(Box::new(expr));
+                }
+                self.next_token();
             } else {
                 let op = self.convert_binop(&self.current_token);
                 self.next_token();

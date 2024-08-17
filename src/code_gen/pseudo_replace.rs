@@ -22,6 +22,8 @@ impl PsuedoReplacePass {
             statements: Vec::new(),
         };
 
+        assembly.statements.reserve(self.program.statements.len());
+
         for stmt in self.program.statements.clone() {
             self.generate_function(&stmt, &mut assembly);
         }
@@ -69,6 +71,11 @@ impl PsuedoReplacePass {
                 let dst = self.emit_operand(dst);
 
                 instructions.push(assembly::Instruction::Ldi(dst, imm.clone()));
+            },
+            assembly::Instruction::Adi(ref src, ref imm) => {
+                let src = self.emit_operand(src);
+
+                instructions.push(assembly::Instruction::Adi(src, imm.clone()));
             },
             assembly::Instruction::Cmp(ref src1, ref src2) => {
                 let src1 = self.emit_operand(src1);

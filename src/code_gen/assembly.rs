@@ -21,6 +21,7 @@ pub enum CondCode {
 pub enum Instruction {
     Mov(Operand, Operand),
     Ldi(Operand, i8),
+    Adi(Operand, i8),
     Unary(Unop, Operand, Operand),
     Binary(Binop, Operand, Operand, Operand),
     Cmp(Operand, Operand),

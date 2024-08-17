@@ -88,6 +88,62 @@ impl Tacky {
                     self.emit_block_item(stmt, body);
                 }
             }
+            nodes::Statement::Break(label) => {
+                body.push(definition::Instruction::Label(format!("{}.break", label)))
+            }
+            nodes::Statement::Continue(label) => {
+                body.push(definition::Instruction::Label(format!("{}.continue", label)))
+            }
+            nodes::Statement::While(cond, loop_body, label) => {
+                let continue_label = format!("{}.continue", label);
+                let break_label = format!("{}.break", label);
+                body.push(definition::Instruction::Label(continue_label.clone()));
+                let val = self.emit_expression(cond, body);
+                body.push(definition::Instruction::JumpIfZero(val, break_label.clone()));
+                self.emit_statement(loop_body, body);
+                body.push(definition::Instruction::Jump(continue_label.clone()));
+                body.push(definition::Instruction::Label(break_label.clone()));
+            }
+            nodes::Statement::DoWhile(loop_body, cond, label) => {
+                let continue_label = format!("{}.continue", label);
+                let break_label = format!("{}.break", label);
+                body.push(definition::Instruction::Label(continue_label.clone()));
+                self.emit_statement(loop_body, body);
+                let val = self.emit_expression(cond, body);
+                body.push(definition::Instruction::JumpIfNotZero(val, continue_label.clone()));
+                body.push(definition::Instruction::Label(break_label.clone()));
+            }
+            nodes::Statement::For(init, cond, post, loop_body, label) => {
+                let continue_label = format!("{}.continue", label);
+                let break_label = format!("{}.break", label);
+                match init {
+                    nodes::ForInit::Declaration(ref decl) => {
+                        if decl.expr.is_some() {
+                            let expr = decl.expr.as_ref().unwrap();
+                            let val = self.emit_expression(expr, body);
+                            let name = match decl.name {
+                                nodes::Identifier::Var(ref s) => s.clone(),
+                            };
+                            body.push(definition::Instruction::Copy(definition::Val::Var(name.clone()), val));
+                        }
+                    }
+                    nodes::ForInit::Expression(ref expr) => {
+                        self.emit_expression(expr, body);
+                    }
+                    nodes::ForInit::Empty => {}
+                }
+                body.push(definition::Instruction::Label(continue_label.clone()));
+                if cond.is_some() {
+                    let val = self.emit_expression(cond.as_ref().unwrap(), body);
+                    body.push(definition::Instruction::JumpIfZero(val, break_label.clone()));
+                }
+                self.emit_statement(loop_body, body);
+                if post.is_some() {
+                    self.emit_expression(post.as_ref().unwrap(), body);
+                }
+                body.push(definition::Instruction::Jump(continue_label.clone()));
+                body.push(definition::Instruction::Label(break_label.clone()));
+            }
             nodes::Statement::Empty => {}
         }
     }
@@ -213,6 +269,34 @@ impl Tacky {
                 body.push(definition::Instruction::Copy(dest.clone(), v2));
                 body.push(definition::Instruction::Label(end_label));
                 dest
+            }
+            nodes::Expression::Increment(ref expr) => {
+                let expr = match **expr {
+                    nodes::Expression::Var(ref s) => {
+                        match s {
+                            nodes::Identifier::Var(s) => s.clone(),
+                        }
+                    }
+                    _ => panic!("Invalid increment target"),
+                };
+
+                let src = definition::Val::Var(expr.clone());
+                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), src.clone()));
+                src
+            }
+            nodes::Expression::Decrement(ref expr) => {
+                let expr = match **expr {
+                    nodes::Expression::Var(ref s) => {
+                        match s {
+                            nodes::Identifier::Var(s) => s.clone(),
+                        }
+                    }
+                    _ => panic!("Invalid increment target"),
+                };
+
+                let src = definition::Val::Var(expr.clone());
+                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), src.clone()));
+                src
             }
         }
     }

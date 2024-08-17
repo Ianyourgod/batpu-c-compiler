@@ -32,6 +32,7 @@ pub enum Unop {
     Negate,
     BitwiseNot,
     LogicalNot,
+    AddImm,
 }
 
 #[derive(Debug, Clone)]

@@ -15,6 +15,18 @@ pub enum Statement {
     Expression(Expression),
     If(Expression, Box<Statement>, Box<Option<Statement>>),
     Compound(Vec<BlockItem>),
+    Break(String),
+    Continue(String),
+    While(Expression, Box<Statement>, String),
+    DoWhile(Box<Statement>, Expression, String),
+    For(ForInit, Option<Expression>, Option<Expression>, Box<Statement>, String),
+    Empty,
+}
+
+#[derive(Debug, Clone)]
+pub enum ForInit {
+    Declaration(Declaration),
+    Expression(Expression),
     Empty,
 }
 
@@ -42,7 +54,9 @@ pub enum Expression {
     Binop(Binop, Box<Expression>, Box<Expression>),
     Var(Identifier),
     Assign(Box<Expression>, Box<Expression>), // lvalues :scream:
-    Conditional(Box<Expression>, Box<Expression>, Box<Expression>)
+    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
+    Increment(Box<Expression>),
+    Decrement(Box<Expression>),
 }
 
 #[derive(Debug, Clone)]
