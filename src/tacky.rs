@@ -16,16 +16,30 @@ impl Tacky {
     }
 
     pub fn emit(&mut self) -> definition::Program {
-        let mut statements: Vec<definition::FuncDecl> = Vec::new();
+        let mut statements: Vec<definition::FuncDef> = Vec::new();
 
         for func in self.program.statements.clone() {
+            if func.body.len() == 0 {
+                continue;
+            }
+
             let mut body: Vec<definition::Instruction> = Vec::new();
+            let mut params: Vec<String> = Vec::with_capacity(func.params.len());
+            
+            for param in &func.params {
+                let name = match param {
+                    nodes::Identifier::Var(ref s) => s.clone(),
+                };
+                params.push(name);
+            }
+            
             for instr in &func.body {
                 self.emit_block_item(instr, &mut body);
             }
 
-            let func = definition::FuncDecl {
+            let func = definition::FuncDef {
                 name: func.name.clone(),
+                params,
                 body,
             };
 
@@ -43,18 +57,23 @@ impl Tacky {
                 self.emit_statement(inner_stmt, body);
             }
             nodes::BlockItem::Declaration(ref decl) => {
-                if decl.expr.is_some() {
-                    // this is just assignment
-                    let expr = decl.expr.as_ref().unwrap();
-                    
-                    let val = self.emit_expression(expr, body);
-                    let name = match decl.name {
-                        nodes::Identifier::Var(ref s) => s.clone(),
-                    };
+                if let nodes::Declaration::VarDecl(ref decl) = decl {
+                    // we only care about variable declarations
 
-                    body.push(definition::Instruction::Copy(definition::Val::Var(name.clone()), val));
+                    if decl.expr.is_some() {
+                        // this is just assignment
+                        let expr = decl.expr.as_ref().unwrap();
+                        
+                        let val = self.emit_expression(expr, body);
+                        let name = match decl.name {
+                            nodes::Identifier::Var(ref s) => s.clone(),
+                        };
+
+                        body.push(definition::Instruction::Copy(definition::Val::Var(name.clone()), val));
+                    }
+                    // we don't need to do anything for declarations without an expression
                 }
-                // we don't need to do anything for declarations without an expression
+                // TODO: handle function declarations
             }
         }
     }
@@ -118,6 +137,11 @@ impl Tacky {
                 let break_label = format!("{}.break", label);
                 match init {
                     nodes::ForInit::Declaration(ref decl) => {
+                        let decl = match decl {
+                            nodes::Declaration::VarDecl(ref decl) => decl,
+                            _ => panic!("Invalid for loop initializer"),
+                        };
+
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
                             let val = self.emit_expression(expr, body);
@@ -297,6 +321,17 @@ impl Tacky {
                 let src = definition::Val::Var(expr.clone());
                 body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), src.clone()));
                 src
+            }
+            nodes::Expression::FunctionCall(ref ident, ref args) => {
+                let mut arg_vals = Vec::new();
+                for arg in args {
+                    arg_vals.push(self.emit_expression(arg, body));
+                }
+
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone());
+                body.push(definition::Instruction::FunCall(ident.clone(), arg_vals, dest.clone()));
+                dest
             }
         }
     }

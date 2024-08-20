@@ -2,14 +2,12 @@ use crate::code_gen::assembly;
 
 pub struct InstructionFixupPass {
     program: assembly::Program,
-    stack_offset: i16,
 }
 
 impl InstructionFixupPass {
-    pub fn new(program: assembly::Program, stack_offset: i16) -> InstructionFixupPass {
+    pub fn new(program: assembly::Program) -> InstructionFixupPass {
         InstructionFixupPass {
             program,
-            stack_offset,
         }
     }
 
@@ -28,7 +26,7 @@ impl InstructionFixupPass {
     fn generate_function(&self, func: &assembly::FuncDecl, program: &mut assembly::Program) {
         let mut instrs: Vec<assembly::Instruction> = Vec::new();
 
-        instrs.push(assembly::Instruction::AllocateStack(self.stack_offset as u8));
+        instrs.push(assembly::Instruction::AllocateStack(func.stack_size as u8));
 
         for stmt in &func.body {
             self.generate_instruction(stmt, &mut instrs);
@@ -37,6 +35,7 @@ impl InstructionFixupPass {
         let func = assembly::FuncDecl {
             name: func.name.clone(),
             body: instrs,
+            stack_size: func.stack_size,
         };
 
         program.statements.push(func);
@@ -231,6 +230,7 @@ impl InstructionFixupPass {
             assembly::Instruction::Jmp(_) |
             assembly::Instruction::JmpCC(_, _) |
             assembly::Instruction::Label(_) |
+            assembly::Instruction::Call(_) |
             assembly::Instruction::Return => instructions.push(stmt.clone()),
             //d_ => instructions.push(stmt.clone()),
         }

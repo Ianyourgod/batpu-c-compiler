@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub struct Program {
     pub statements: Vec<FuncDecl>,
@@ -6,6 +8,7 @@ pub struct Program {
 #[derive(Debug, Clone)]
 pub struct FuncDecl {
     pub name: String,
+    pub params: Vec<Identifier>,
     pub body: Vec<BlockItem>,
 }
 
@@ -31,7 +34,13 @@ pub enum ForInit {
 }
 
 #[derive(Debug, Clone)]
-pub struct Declaration {
+pub enum Declaration {
+    VarDecl(VarDecl),
+    FuncDecl(FuncDecl),
+}
+
+#[derive(Debug, Clone)]
+pub struct VarDecl {
     pub name: Identifier,
     pub expr: Option<Expression>,
 }
@@ -57,6 +66,7 @@ pub enum Expression {
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
     Increment(Box<Expression>),
     Decrement(Box<Expression>),
+    FunctionCall(String, Vec<Expression>),
 }
 
 #[derive(Debug, Clone)]
@@ -78,4 +88,35 @@ pub enum Binop {
     LessThanEqual,
     GreaterThan,
     GreaterThanEqual,
+}
+
+#[derive(Debug, Clone)]
+pub struct SymbolTable {
+    symbols: HashMap<Identifier, (Type, bool)>,
+}
+
+impl SymbolTable {
+    pub fn new() -> Self {
+        SymbolTable {
+            symbols: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, id: Identifier, ty: (Type, bool)) {
+        self.symbols.insert(id, ty);
+    }
+
+    pub fn lookup(&self, id: &Identifier) -> Option<&(Type, bool)> {
+        self.symbols.get(id)
+    }
+
+    pub fn contains(&self, id: &Identifier) -> bool {
+        self.symbols.contains_key(id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type {
+    Int,
+    Fn(i32)
 }

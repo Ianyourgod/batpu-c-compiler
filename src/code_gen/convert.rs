@@ -1,6 +1,27 @@
 use crate::code_gen::assembly;
 use crate::tacky::definition;
 
+// we use as many registers as we can for parameters, as the cpu doesnt have a lot of memory
+macro_rules! param_registers {
+    () => {
+        vec![
+            assembly::Register::new("r1".to_string()),
+            assembly::Register::new("r2".to_string()),
+            assembly::Register::new("r3".to_string()),
+            assembly::Register::new("r4".to_string()),
+            assembly::Register::new("r5".to_string()),
+            assembly::Register::new("r6".to_string()),
+            assembly::Register::new("r7".to_string()),
+            assembly::Register::new("r8".to_string()),
+            assembly::Register::new("r9".to_string()),
+            assembly::Register::new("r10".to_string()),
+            assembly::Register::new("r11".to_string()),
+            assembly::Register::new("r12".to_string()),
+            assembly::Register::new("r13".to_string()),
+        ]
+    };
+}
+
 pub struct ConvertPass {
     program: definition::Program,
     tmp_counter: u32,
@@ -27,8 +48,21 @@ impl ConvertPass {
         assembly
     }
 
-    fn generate_function(&mut self, func: &definition::FuncDecl, program: &mut assembly::Program) {
+    fn generate_function(&mut self, func: &definition::FuncDef, program: &mut assembly::Program) {
         let mut instrs: Vec<assembly::Instruction> = Vec::new();
+
+        let param_regs = param_registers!();
+        let mut current_reg = 0;
+        for param in &func.params {
+            if current_reg >= param_regs.len() {
+                panic!("Too many parameters");
+            }
+            instrs.push(assembly::Instruction::Mov(
+                assembly::Operand::Register(param_regs[current_reg].clone()),
+                assembly::Operand::Pseudo(param.clone())
+            ));
+            current_reg += 1;
+        }
 
         for stmt in &func.body {
             self.generate_instruction(stmt, &mut instrs);
@@ -37,6 +71,7 @@ impl ConvertPass {
         let func = assembly::FuncDecl {
             name: func.name.clone(),
             body: instrs,
+            stack_size: 0,
         };
 
         program.statements.push(func);
@@ -171,6 +206,26 @@ impl ConvertPass {
             },
             definition::Instruction::Label(ref label) => {
                 instructions.push(assembly::Instruction::Label(label.clone()));
+            },
+            definition::Instruction::FunCall(ref name, ref params, ref dst) => {
+                let param_regs = param_registers!();
+                let mut current_reg = 0;
+                for param in params {
+                    if current_reg >= param_regs.len() {
+                        panic!("Too many parameters");
+                    }
+                    instructions.push(assembly::Instruction::Mov(
+                        self.convert_val(param),
+                        assembly::Operand::Register(param_regs[current_reg].clone())
+                    ));
+                    current_reg += 1;
+                }
+
+                instructions.push(assembly::Instruction::Call(name.clone()));
+                instructions.push(assembly::Instruction::Mov(
+                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                    self.convert_val(dst)
+                ));
             },
         }
     }

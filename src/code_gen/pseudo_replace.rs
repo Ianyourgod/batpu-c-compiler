@@ -4,20 +4,22 @@ use crate::code_gen::assembly;
 
 pub struct PsuedoReplacePass {
     program: assembly::Program,
-    stack_offset: i16, // 16 so we can go negative and and still go positive above like 127
     symbol_table: HashMap<String, i16>,
+}
+
+struct Context {
+    pub stack_offset: i16,
 }
 
 impl PsuedoReplacePass {
     pub fn new(program: assembly::Program) -> PsuedoReplacePass {
         PsuedoReplacePass {
             program,
-            stack_offset: 0,
             symbol_table: HashMap::new(),
         }
     }
 
-    pub fn generate(&mut self) -> (assembly::Program, i16) {
+    pub fn generate(&mut self) -> assembly::Program {
         let mut assembly = assembly::Program {
             statements: Vec::new(),
         };
@@ -28,58 +30,61 @@ impl PsuedoReplacePass {
             self.generate_function(&stmt, &mut assembly);
         }
 
-        (assembly, self.stack_offset)
+        assembly
     }
 
     fn generate_function(&mut self, func: &assembly::FuncDecl, program: &mut assembly::Program) {
         let mut instrs: Vec<assembly::Instruction> = Vec::new();
 
+        let mut context = Context { stack_offset: 0 };
+
         for stmt in &func.body {
-            self.generate_instruction(stmt, &mut instrs);
+            self.generate_instruction(stmt, &mut instrs, &mut context);
         }
 
         let func = assembly::FuncDecl {
             name: func.name.clone(),
             body: instrs,
+            stack_size: context.stack_offset,
         };
 
         program.statements.push(func);
     }
 
-    fn generate_instruction(&mut self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>) {
+    fn generate_instruction(&mut self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>, context: &mut Context) {
         match stmt {
             assembly::Instruction::Unary(ref op, ref src, ref dst) => {
-                let src = self.emit_operand(src);
-                let dst = self.emit_operand(dst);
+                let src = self.emit_operand(src, context);
+                let dst = self.emit_operand(dst, context);
 
                 instructions.push(assembly::Instruction::Unary(op.clone(), src, dst));
             },
             assembly::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
-                let src1 = self.emit_operand(src1);
-                let src2 = self.emit_operand(src2);
-                let dst = self.emit_operand(dst);
+                let src1 = self.emit_operand(src1, context);
+                let src2 = self.emit_operand(src2, context);
+                let dst = self.emit_operand(dst, context);
 
                 instructions.push(assembly::Instruction::Binary(op.clone(), src1, src2, dst));
             },
             assembly::Instruction::Mov(ref src, ref dst) => {
-                let src = self.emit_operand(src);
-                let dst = self.emit_operand(dst);
+                let src = self.emit_operand(src, context);
+                let dst = self.emit_operand(dst, context);
 
                 instructions.push(assembly::Instruction::Mov(src, dst));
             },
             assembly::Instruction::Ldi(ref dst, ref imm) => {
-                let dst = self.emit_operand(dst);
+                let dst = self.emit_operand(dst, context);
 
                 instructions.push(assembly::Instruction::Ldi(dst, imm.clone()));
             },
             assembly::Instruction::Adi(ref src, ref imm) => {
-                let src = self.emit_operand(src);
+                let src = self.emit_operand(src, context);
 
                 instructions.push(assembly::Instruction::Adi(src, imm.clone()));
             },
             assembly::Instruction::Cmp(ref src1, ref src2) => {
-                let src1 = self.emit_operand(src1);
-                let src2 = self.emit_operand(src2);
+                let src1 = self.emit_operand(src1, context);
+                let src2 = self.emit_operand(src2, context);
 
                 instructions.push(assembly::Instruction::Cmp(src1, src2));
             }
@@ -89,21 +94,22 @@ impl PsuedoReplacePass {
             assembly::Instruction::Str(_, _, _) |
             assembly::Instruction::Jmp(_) |
             assembly::Instruction::JmpCC(_, _) |
+            assembly::Instruction::Call(_) |
             assembly::Instruction::Label(_) => instructions.push(stmt.clone()),
         }
     }
 
-    fn emit_operand(&mut self, operand: &assembly::Operand) -> assembly::Operand {
+    fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context) -> assembly::Operand {
         match operand {
             assembly::Operand::Pseudo(ref identifier) => {
                 if self.symbol_table.contains_key(identifier) {
                     return assembly::Operand::Stack(*self.symbol_table.get(identifier).unwrap());
                 }
 
-                self.stack_offset += 1;
+                context.stack_offset += 1;
 
-                self.symbol_table.insert(identifier.clone(), self.stack_offset);
-                assembly::Operand::Stack(self.stack_offset)
+                self.symbol_table.insert(identifier.clone(), context.stack_offset);
+                assembly::Operand::Stack(context.stack_offset)
             },
             _ => operand.clone(),
         }

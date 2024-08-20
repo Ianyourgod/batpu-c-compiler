@@ -1,11 +1,12 @@
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub statements: Vec<FuncDecl>,
+    pub statements: Vec<FuncDef>,
 }
 
 #[derive(Debug, Clone)]
-pub struct FuncDecl {
+pub struct FuncDef {
     pub name: String,
+    pub params: Vec<String>,
     pub body: Vec<Instruction>,
 }
 
@@ -19,6 +20,7 @@ pub enum Instruction {
     JumpIfZero(Val, String),
     JumpIfNotZero(Val, String),
     Label(String),
+    FunCall(String, Vec<Val>, Val),
 }
 
 #[derive(Debug, Clone)]

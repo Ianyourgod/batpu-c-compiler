@@ -7,6 +7,7 @@ pub struct Program {
 pub struct FuncDecl {
     pub name: String,
     pub body: Vec<Instruction>,
+    pub stack_size: i16,
 }
 
 #[derive(Debug, Clone)]
@@ -26,11 +27,14 @@ pub enum Instruction {
     Binary(Binop, Operand, Operand, Operand),
     Cmp(Operand, Operand),
     AllocateStack(u8),
+    //DeallocateStack(u8),
     Lod(Register, i16, Register),
     Str(Register, i16, Register),
     Jmp(String),
     JmpCC(CondCode, String),
     Label(String),
+    //Push(Operand),
+    Call(String),
     Return,
 }
 

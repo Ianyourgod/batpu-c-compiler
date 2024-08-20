@@ -19,12 +19,19 @@ impl LoopLabeling {
         for func in self.program.statements.clone() {
             let mut body: Vec<nodes::BlockItem> = Vec::new();
             let mut current_label = "".to_string();
+            let mut params: Vec<nodes::Identifier> = Vec::with_capacity(func.params.len());
+
+            for param in func.params {
+                params.push(param);
+            }
+
             for instr in &func.body {
                 body.push(self.resolve_block_item(instr, &mut current_label));
             }
 
             let func = nodes::FuncDecl {
                 name: func.name.clone(),
+                params,
                 body,
             };
 

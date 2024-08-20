@@ -55,12 +55,22 @@ impl Parser {
         };
         self.next_token();
 
-        if self.current_token != TokenType::LParen {
-            panic!("Expected '(', got {:?}", self.current_token);
-        }
-        self.next_token();
-        if self.current_token != TokenType::RParen {
-            panic!("Expected ')', got {:?}", self.current_token);
+        self.consume(TokenType::LParen);
+
+        let mut args: Vec<nodes::Identifier> = Vec::new();
+
+        while self.current_token != TokenType::RParen {
+            if self.current_token != TokenType::Keyword("int".to_string()) {
+                panic!("Expected type, got {:?}", self.current_token);
+            }
+            self.next_token();
+            let arg = self.parse_lvalue();
+            args.push(arg);
+            if self.current_token == TokenType::Comma {
+                self.next_token();
+            } else if self.current_token != TokenType::RParen {
+                panic!("Expected ',' or ')', got {:?}", self.current_token);
+            }
         }
 
         self.next_token();
@@ -79,6 +89,7 @@ impl Parser {
 
         nodes::FuncDecl {
             name,
+            params: args,
             body,
         }
     }
@@ -144,24 +155,30 @@ impl Parser {
         }
     }
 
+    fn parse_lvalue(&mut self) -> nodes::Identifier {
+        match self.current_token.clone() {
+            TokenType::Identifier(s) => {
+                self.next_token();
+                nodes::Identifier::Var(s.clone())
+            },
+            _ => panic!("Expected lvalue, got {:?}", self.current_token),
+        }
+    }
+
     fn parse_declaration(&mut self) -> nodes::Declaration {
         if self.current_token != TokenType::Keyword("int".to_string()) {
             panic!("Expected int, got {:?}", self.current_token);
         }
         self.next_token();
 
-        let name = match self.current_token {
-            TokenType::Identifier(ref s) => s.clone(),
-            _ => panic!("Expected identifier, got {:?}", self.current_token),
-        };
-        self.next_token();
+        let name = self.parse_lvalue();
 
         if self.current_token == TokenType::Semicolon {
             self.next_token();
-            nodes::Declaration {
-                name: nodes::Identifier::Var(name),
+            nodes::Declaration::VarDecl(nodes::VarDecl {
+                name,
                 expr: None
-            }
+            })
         } else if self.current_token == TokenType::Equals {
             self.next_token();
             let expr = self.parse_expression(0);
@@ -169,10 +186,10 @@ impl Parser {
                 panic!("Expected semicolon, got {:?}", self.current_token);
             }
             self.next_token();
-            nodes::Declaration {
-                name: nodes::Identifier::Var(name),
+            nodes::Declaration::VarDecl(nodes::VarDecl {
+                name,
                 expr: Some(expr)
-            }
+            })
         } else {
             panic!("Unexpected token: {:?}", self.current_token);
         }
@@ -378,7 +395,22 @@ impl Parser {
             }
             TokenType::Identifier(ident) => {
                 self.next_token();
-                nodes::Expression::Var(nodes::Identifier::Var(ident.clone()))
+                if self.current_token == TokenType::LParen {
+                    self.next_token();
+                    let mut args: Vec<nodes::Expression> = Vec::new();
+                    while self.current_token != TokenType::RParen {
+                        args.push(self.parse_expression(0));
+                        if self.current_token == TokenType::Comma {
+                            self.next_token();
+                        } else if self.current_token != TokenType::RParen {
+                            panic!("Expected ',' or ')', got {:?}", self.current_token);
+                        }
+                    }
+                    self.next_token();
+                    nodes::Expression::FunctionCall(ident, args)
+                } else {
+                    nodes::Expression::Var(nodes::Identifier::Var(ident))
+                }
             }
             TokenType::Tilde | TokenType::Minus |
             TokenType::LogicalNot => self.parse_unop(),

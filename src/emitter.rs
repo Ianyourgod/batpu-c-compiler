@@ -92,7 +92,7 @@ hlt
                 format!("ldi {} {}", self.emit_operand(reg), i)
             }
             assembly::Instruction::Return => {
-                "mov r15 r14\n    lod r14 r15 0\n    adi r14 1\n    ret".to_string()
+                "mov r15 r14\n    lod r14 r15 1\n    adi r14 1\n    ret".to_string()
             }
             assembly::Instruction::Unary(ref op, ref src, ref dst) => {
                 self.emit_unop(op, src, dst)
@@ -129,6 +129,9 @@ hlt
             }
             assembly::Instruction::Label(ref lbl) => {
                 format!(".{}", lbl)
+            }
+            assembly::Instruction::Call(ref lbl) => {
+                format!("cal .user_func_{}", lbl)
             }
         }
     }
