@@ -353,15 +353,28 @@ impl Parser {
         }
     }
 
+    fn is_op_assign(&self, token: &TokenType) -> (bool, nodes::Binop) {
+        match token {
+            TokenType::AddAssign => (true, nodes::Binop::Add),
+            TokenType::SubAssign => (true, nodes::Binop::Subtract),
+            _ => (false, nodes::Binop::Add),
+        }
+    }
+
     fn parse_expression(&mut self, min_prec: i32) -> nodes::Expression {
         let mut expr = self.parse_factor();
 
         // dont mind the weird fuckery
         let mut prec: i32;
+        let mut is_op_assign: (bool, nodes::Binop);
         while (prec = self.get_precedence(&self.current_token), prec).1 >= min_prec {
             if self.current_token == TokenType::Equals {
                 self.next_token();
                 expr = nodes::Expression::Assign(Box::new(expr), Box::new(self.parse_expression(prec)));
+            // more fuckery :tongue:
+            } else if (is_op_assign = self.is_op_assign(&self.current_token), is_op_assign.0).1 {
+                self.next_token();
+                expr = nodes::Expression::Assign(Box::new(expr.clone()), Box::new(nodes::Expression::Binop(is_op_assign.1, Box::new(expr), Box::new(self.parse_expression(prec)))))
             } else if self.current_token == TokenType::QuestionMark {
                 self.next_token();
                 let middle = self.parse_expression(0);
