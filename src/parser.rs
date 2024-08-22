@@ -19,6 +19,9 @@ impl Parser {
 
     fn next_token(&mut self) {
         self.current_token = self.lexer.next_token();
+        if self.current_token == TokenType::Illegal {
+            panic!("Illegal Token");
+        }
     }
 
     fn consume(&mut self, expects: TokenType) {
