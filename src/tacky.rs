@@ -27,10 +27,7 @@ impl Tacky {
             let mut params: Vec<String> = Vec::with_capacity(func.params.len());
             
             for param in &func.params {
-                let name = match param {
-                    nodes::Identifier::Var(ref s) => s.clone(),
-                };
-                params.push(name);
+                params.push(param.name.clone());
             }
             
             for instr in &func.body {
@@ -65,11 +62,9 @@ impl Tacky {
                         let expr = decl.expr.as_ref().unwrap();
                         
                         let val = self.emit_expression(expr, body);
-                        let name = match decl.name {
-                            nodes::Identifier::Var(ref s) => s.clone(),
-                        };
+                        let name = decl.name.name.clone();
 
-                        body.push(definition::Instruction::Copy(definition::Val::Var(name.clone()), val));
+                        body.push(definition::Instruction::Copy(definition::Val::Var(name), val));
                     }
                     // we don't need to do anything for declarations without an expression
                 }
@@ -145,10 +140,8 @@ impl Tacky {
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
                             let val = self.emit_expression(expr, body);
-                            let name = match decl.name {
-                                nodes::Identifier::Var(ref s) => s.clone(),
-                            };
-                            body.push(definition::Instruction::Copy(definition::Val::Var(name.clone()), val));
+                            let name = decl.name.name.clone();
+                            body.push(definition::Instruction::Copy(definition::Val::Var(name), val));
                         }
                     }
                     nodes::ForInit::Expression(ref expr) => {
@@ -258,18 +251,12 @@ impl Tacky {
                 dest
             }
             nodes::Expression::Var(ref s) => {
-                let s = match s {
-                    nodes::Identifier::Var(s) => s.clone(),
-                };
-
-                definition::Val::Var(s)
+                definition::Val::Var(s.name.clone())
             }
             nodes::Expression::Assign(ref lhs, ref rhs) => {
                 let lhs = match **lhs {
                     nodes::Expression::Var(ref s) => {
-                        match s {
-                            nodes::Identifier::Var(s) => s.clone(),
-                        }
+                        s.name.clone()
                     }
                     _ => panic!("Invalid assignment target"),
                 };
@@ -297,9 +284,7 @@ impl Tacky {
             nodes::Expression::Increment(ref expr) => {
                 let expr = match **expr {
                     nodes::Expression::Var(ref s) => {
-                        match s {
-                            nodes::Identifier::Var(s) => s.clone(),
-                        }
+                        s.name.clone()
                     }
                     _ => panic!("Invalid increment target"),
                 };
@@ -311,9 +296,7 @@ impl Tacky {
             nodes::Expression::Decrement(ref expr) => {
                 let expr = match **expr {
                     nodes::Expression::Var(ref s) => {
-                        match s {
-                            nodes::Identifier::Var(s) => s.clone(),
-                        }
+                        s.name.clone()
                     }
                     _ => panic!("Invalid increment target"),
                 };

@@ -1,11 +1,13 @@
-int mult(int a, int b) {
-    int result = 0;
-    for (int i = 0; i < b; i++) {
-        result += a;
-    }
-    return result;
-}
-
 int main() {
-    return 2 || 2;
+    int a = 1;
+    int b = 1;
+    int c = 1;
+    int d = 1;
+    int e = 1;
+    int f = 1;
+    int g = 1;
+    int h = 1;
+    int i = 1;
+    int j = 1;
+    int k = 1;
 }

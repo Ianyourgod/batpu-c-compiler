@@ -26,7 +26,7 @@ impl TypeChecker {
         let has_body = decl.body.len() > 0;
         let mut already_defined = false;
 
-        let ident = nodes::Identifier::Var(decl.name.clone());
+        let ident = nodes::Identifier { name: decl.name.clone() };
 
         if self.symbol_table.contains(&ident) {
             let old_decl = self.symbol_table.lookup(&ident).unwrap();
@@ -90,7 +90,7 @@ impl TypeChecker {
     fn typecheck_expression(&mut self, expr: &nodes::Expression) {
         match expr {
             nodes::Expression::FunctionCall(ident, args) => {
-                let ident_type = self.symbol_table.lookup(&nodes::Identifier::Var(ident.clone())).unwrap();
+                let ident_type = self.symbol_table.lookup(&nodes::Identifier { name: ident.clone() }).unwrap();
                 if ident_type.0 == nodes::Type::Int {
                     panic!("Variable {} is not a function", ident);
                 }

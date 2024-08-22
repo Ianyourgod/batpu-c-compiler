@@ -162,7 +162,7 @@ impl Parser {
         match self.current_token.clone() {
             TokenType::Identifier(s) => {
                 self.next_token();
-                nodes::Identifier::Var(s.clone())
+                nodes::Identifier { name: s }
             },
             _ => panic!("Expected lvalue, got {:?}", self.current_token),
         }
@@ -425,7 +425,7 @@ impl Parser {
                     self.next_token();
                     nodes::Expression::FunctionCall(ident, args)
                 } else {
-                    nodes::Expression::Var(nodes::Identifier::Var(ident))
+                    nodes::Expression::Var(nodes::Identifier { name: ident })
                 }
             }
             TokenType::Tilde | TokenType::Minus |

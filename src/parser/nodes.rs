@@ -46,8 +46,8 @@ pub struct VarDecl {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Identifier {
-    Var(String),
+pub struct Identifier {
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]

@@ -27,15 +27,15 @@ impl VariableResolution {
         let mut global_var_map: HashMap<nodes::Identifier, VarData> = HashMap::new();
 
         for func in self.program.statements.clone() {
-            global_var_map.insert(nodes::Identifier::Var(func.name.clone()), VarData { name: func.name.clone(), has_expr: func.body.len() > 0 });
+            global_var_map.insert(nodes::Identifier { name: func.name.clone() }, VarData { name: func.name.clone(), has_expr: func.body.len() > 0 });
             let mut body: Vec<nodes::BlockItem> = Vec::new();
             let mut variable_map = global_var_map.clone();
             let mut params: Vec<nodes::Identifier> = Vec::with_capacity(func.params.len());
 
             for param in func.params {
-                let unique_name = self.generate_unique_name("arg", match param { nodes::Identifier::Var(ref s) => s.clone() });
+                let unique_name = self.generate_unique_name("arg", param.name.clone());
                 variable_map.insert(param, VarData { name: unique_name.clone(), has_expr: false });
-                params.push(nodes::Identifier::Var(unique_name));
+                params.push(nodes::Identifier { name: unique_name });
             }
 
             for instr in &func.body {
@@ -72,9 +72,9 @@ impl VariableResolution {
                             panic!("Variable {:?} already declared", decl.name);
                         }
         
-                        let orig_name = match decl.name { nodes::Identifier::Var(ref s) => s.clone() };
+                        let orig_name = decl.name.clone();
         
-                        let unique_name = self.generate_unique_name("var", orig_name);
+                        let unique_name = self.generate_unique_name("var", orig_name.name);
         
                         variable_map.insert(decl.name.clone(), VarData { name: unique_name.clone(), has_expr: decl.expr.is_some() });
         
@@ -82,7 +82,7 @@ impl VariableResolution {
                             let expr = decl.expr.as_ref().unwrap();
                             let val = self.resolve_expression(expr, variable_map);
                             nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
-                                name: nodes::Identifier::Var(unique_name),
+                                name: nodes::Identifier { name: unique_name },
                                 expr: Some(val),
                             }))
                         } else {
@@ -148,8 +148,8 @@ impl VariableResolution {
                                 None => None,
                             },
                         };
-                        let var = match decl.name { nodes::Identifier::Var(ref s) => s.clone() };
-                        variable_map.insert(decl.name.clone(), VarData { name: var, has_expr: decl.expr.is_some() });
+                        let var = decl.name.clone();
+                        variable_map.insert(var.clone(), VarData { name: var.name, has_expr: decl.expr.is_some() });
                         nodes::ForInit::Declaration(nodes::Declaration::VarDecl(decl))
                     },
                     nodes::ForInit::Expression(ref expr) => {
@@ -200,8 +200,8 @@ impl VariableResolution {
             nodes::Expression::IntegerLiteral(_) => expr.clone(),
             nodes::Expression::Var(ref ident) => {
                 if variable_map.contains_key(ident) {
-                    let ident = match ident { nodes::Identifier::Var(ref s) => s.clone() };
-                    nodes::Expression::Var(nodes::Identifier::Var(variable_map.get(&nodes::Identifier::Var(ident)).unwrap().name.clone()))
+                    let ident = ident.name.clone();
+                    nodes::Expression::Var(nodes::Identifier { name: variable_map.get(&nodes::Identifier { name: ident }).unwrap().name.clone() })
                 } else {
                     panic!("Variable {:?} not found", ident);
                 }
@@ -242,7 +242,7 @@ impl VariableResolution {
                 nodes::Expression::Decrement(Box::new(expr))
             },
             nodes::Expression::FunctionCall(name, args) => {
-                let ident = nodes::Identifier::Var(name.clone());
+                let ident = nodes::Identifier { name: name.clone() };
                 if variable_map.contains_key(&ident) {
                     let name = variable_map.get(&ident).unwrap();
                     let args = args.iter().map(|arg| self.resolve_expression(arg, variable_map)).collect();

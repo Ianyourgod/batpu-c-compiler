@@ -111,10 +111,32 @@ hlt
                 format!("adi {} {}", self.emit_operand(reg), i)
             }
             assembly::Instruction::Lod(ref src, i, ref dst) => {
-                format!("lod {} {} -{}", self.emit_register(src), self.emit_register(dst), i)
+                let ofb_1 = 8 < *i;
+                let out_of_bounds = ofb_1 || *i < -7;
+                let diff = if ofb_1 { 8 - i } else { 7 + i };
+                let mut res = String::new();
+                let src = self.emit_register(src);
+                if out_of_bounds {
+                    // we add the difference to the offset
+                    res.push_str(&format!("adi {} {}\n    ", src, -diff));
+                }
+                res.push_str(&format!("lod {} {} {}", src, self.emit_register(dst), -i));
+                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, diff)) }
+                res
             }
             assembly::Instruction::Str(ref src, i, ref dst) => {
-                format!("str {} {} -{}", self.emit_register(src), self.emit_register(dst), i)
+                let ofb_1 = 8 < *i;
+                let out_of_bounds = ofb_1 || *i < -7;
+                let diff = if ofb_1 { 8 - i } else { 7 + i };
+                let mut res = String::new();
+                let src = self.emit_register(src);
+                if out_of_bounds {
+                    // we add the difference to the offset
+                    res.push_str(&format!("adi {} {}\n    ", src, -diff));
+                }
+                res.push_str(&format!("str {} {} -{}", src, self.emit_register(dst), i + diff*out_of_bounds as i16));
+                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, diff)) }
+                res
             }
             assembly::Instruction::Jmp(lbl) => {
                 format!("jmp .{}", lbl)
