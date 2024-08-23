@@ -1,13 +1,13 @@
 int main() {
-    int a = 1;
-    int b = 1;
-    int c = 1;
-    int d = 1;
-    int e = 1;
-    int f = 1;
-    int g = 1;
-    int h = 1;
-    int i = 1;
-    int j = 1;
-    int k = 1;
+    int v1 = 1;
+    int v2 = 1;
+    int v3 = 1;
+    int v4 = 1;
+    int v5 = 1;
+    int v6 = 1;
+    int v7 = 1;
+    int v8 = 1;
+    int v9 = 1;
+    int v10 = 1;
+    return v1+v2+v3+v4+v5+v6+v7+v8+v9+v10;
 }

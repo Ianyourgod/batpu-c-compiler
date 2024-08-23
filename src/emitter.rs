@@ -35,6 +35,7 @@ hlt
             for instr in &func.body {
                 output.push_str(&format!("    {}\n", self.emit_instruction(instr)));
             }
+            output.push_str("    ret\n");
         }
 
         output
@@ -98,6 +99,7 @@ hlt
                 self.emit_unop(op, src, dst)
             }
             assembly::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
+                
                 format!("{} {} {} {}",
                         self.binop(op),
                         self.emit_operand(src1),
@@ -118,10 +120,10 @@ hlt
                 let src = self.emit_register(src);
                 if out_of_bounds {
                     // we add the difference to the offset
-                    res.push_str(&format!("adi {} {}\n    ", src, -diff));
+                    res.push_str(&format!("{}\n    adi {} {}\n    ", i, src, diff));
                 }
-                res.push_str(&format!("lod {} {} {}", src, self.emit_register(dst), -i));
-                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, diff)) }
+                res.push_str(&format!("lod {} {} {}", src, self.emit_register(dst), -i - diff*out_of_bounds as i16));
+                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
                 res
             }
             assembly::Instruction::Str(ref src, i, ref dst) => {
@@ -132,10 +134,10 @@ hlt
                 let src = self.emit_register(src);
                 if out_of_bounds {
                     // we add the difference to the offset
-                    res.push_str(&format!("adi {} {}\n    ", src, -diff));
+                    res.push_str(&format!("adi {} {}\n    ", src, diff));
                 }
-                res.push_str(&format!("str {} {} -{}", src, self.emit_register(dst), i + diff*out_of_bounds as i16));
-                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, diff)) }
+                res.push_str(&format!("str {} {} {}", src, self.emit_register(dst), -i - diff*out_of_bounds as i16));
+                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
                 res
             }
             assembly::Instruction::Jmp(lbl) => {
