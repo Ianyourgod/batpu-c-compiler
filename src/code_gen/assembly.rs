@@ -1,6 +1,12 @@
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub statements: Vec<FuncDecl>,
+    pub statements: Vec<TopLevel>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TopLevel {
+    FuncDef(FuncDecl),
+    StaticVariable(String, bool, i32),
 }
 
 #[derive(Debug, Clone)]
@@ -8,6 +14,7 @@ pub struct FuncDecl {
     pub name: String,
     pub body: Vec<Instruction>,
     pub stack_size: i16,
+    pub global: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +57,7 @@ pub enum Operand {
     Register(Register),
     Pseudo(String),
     Stack(i16),
+    Data(String),
 }
 
 #[derive(Debug, Clone)]

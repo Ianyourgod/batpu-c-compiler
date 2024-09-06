@@ -147,7 +147,7 @@ impl Lexer {
                 if is_letter(self.ch) {
                     let ident = self.read_identifier();
 
-                    let keywords = vec!["int", "return", "if", "else", "while", "for", "do", "break", "continue"];
+                    let keywords = vec!["int", "return", "if", "else", "while", "for", "do", "break", "continue", "static", "extern"];
                     if keywords.contains(&ident.as_str()) {
                         return TokenType::Keyword(ident);
                     } else {
@@ -166,6 +166,28 @@ impl Lexer {
     }
 
     fn skip_whitespace(&mut self) {
+        while self.ch.is_whitespace() {
+            self.read_char();
+        }
+        while self.ch == '/' && (self.peek_char() == '/' || self.peek_char() == '*') {
+            if self.peek_char() == '*' {
+                self.read_char();
+                self.read_char();
+                while self.ch != '*' && self.peek_char() != '/' {
+                    self.read_char();
+                }
+                self.read_char();
+                self.read_char();
+            } else {
+                while self.ch != '\n' {
+                    self.read_char();
+                }
+                self.read_char();
+            }
+            while self.ch.is_whitespace() {
+                self.read_char();
+            }
+        }
         while self.ch.is_whitespace() {
             self.read_char();
         }

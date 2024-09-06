@@ -14,9 +14,14 @@ impl LoopLabeling {
     }
 
     pub fn resolve(&mut self) -> nodes::Program {
-        let mut statements: Vec<nodes::FuncDecl> = Vec::new();
+        let mut statements: Vec<nodes::Declaration> = Vec::new();
 
-        for func in self.program.statements.clone() {
+        for decl in self.program.statements.clone() {
+            let func = match decl {
+                nodes::Declaration::VarDecl(_) => { statements.push(decl); continue },
+                nodes::Declaration::FuncDecl(fn_decl) => fn_decl
+            };
+
             let mut body: Vec<nodes::BlockItem> = Vec::new();
             let mut current_label = "".to_string();
             let mut params: Vec<nodes::Identifier> = Vec::with_capacity(func.params.len());
@@ -33,9 +38,10 @@ impl LoopLabeling {
                 name: func.name.clone(),
                 params,
                 body,
+                storage_class: func.storage_class.clone(),
             };
 
-            statements.push(func);
+            statements.push(nodes::Declaration::FuncDecl(func));
         }
 
         nodes::Program {

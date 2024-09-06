@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use crate::parser::nodes::{self, SymbolTable};
 use crate::code_gen::assembly;
 
 pub struct PsuedoReplacePass {
     program: assembly::Program,
     symbol_table: HashMap<String, i16>,
+    type_table: SymbolTable,
 }
 
 struct Context {
@@ -12,14 +14,16 @@ struct Context {
 }
 
 impl PsuedoReplacePass {
-    pub fn new(program: assembly::Program) -> PsuedoReplacePass {
+    pub fn new(program: assembly::Program, type_table: SymbolTable) -> PsuedoReplacePass {
         PsuedoReplacePass {
             program,
             symbol_table: HashMap::new(),
+            type_table: type_table,
         }
     }
 
     pub fn generate(&mut self) -> assembly::Program {
+
         let mut assembly = assembly::Program {
             statements: Vec::new(),
         };
@@ -27,6 +31,14 @@ impl PsuedoReplacePass {
         assembly.statements.reserve(self.program.statements.len());
 
         for stmt in self.program.statements.clone() {
+            let stmt = match stmt {
+                assembly::TopLevel::FuncDef(func) => func,
+                assembly::TopLevel::StaticVariable(name, global, init) => {
+                    assembly.statements.push(assembly::TopLevel::StaticVariable(name, global, init));
+                    continue;
+                },
+            };
+
             self.generate_function(&stmt, &mut assembly);
         }
 
@@ -46,9 +58,10 @@ impl PsuedoReplacePass {
             name: func.name.clone(),
             body: instrs,
             stack_size: context.stack_offset,
+            global: func.global,
         };
 
-        program.statements.push(func);
+        program.statements.push(assembly::TopLevel::FuncDef(func));
     }
 
     fn generate_instruction(&mut self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>, context: &mut Context) {
@@ -102,6 +115,12 @@ impl PsuedoReplacePass {
     fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context) -> assembly::Operand {
         match operand {
             assembly::Operand::Pseudo(ref identifier) => {
+                let ident = nodes::Identifier { name: identifier.clone() };
+                let is_static = self.type_table.contains(&ident) && matches!(self.type_table.lookup(&ident).unwrap().1, nodes::TableEntry::StaticAttr(_, _));
+                if is_static {
+                    return assembly::Operand::Data(identifier.clone());
+                }
+
                 if self.symbol_table.contains_key(identifier) {
                     return assembly::Operand::Stack(*self.symbol_table.get(identifier).unwrap());
                 }

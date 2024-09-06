@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub statements: Vec<FuncDecl>,
+    pub statements: Vec<Declaration>,
 }
 
 #[derive(Debug, Clone)]
@@ -10,6 +10,7 @@ pub struct FuncDecl {
     pub name: String,
     pub params: Vec<Identifier>,
     pub body: Vec<BlockItem>,
+    pub storage_class: StorageClass,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ pub enum Declaration {
 pub struct VarDecl {
     pub name: Identifier,
     pub expr: Option<Expression>,
+    pub storage_class: StorageClass,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,7 +94,21 @@ pub enum Binop {
 
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
-    symbols: HashMap<Identifier, (Type, bool)>,
+    symbols: HashMap<Identifier, (Type, TableEntry)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TableEntry {
+    FnAttr(bool, bool), // defined, global
+    StaticAttr(InitialValue, bool), // initial value, global
+    LocalAttr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InitialValue {
+    Tentative,
+    Initial(i32),
+    NoInit,
 }
 
 impl SymbolTable {
@@ -102,11 +118,11 @@ impl SymbolTable {
         }
     }
 
-    pub fn insert(&mut self, id: Identifier, ty: (Type, bool)) {
+    pub fn insert(&mut self, id: Identifier, ty: (Type, TableEntry)) {
         self.symbols.insert(id, ty);
     }
 
-    pub fn lookup(&self, id: &Identifier) -> Option<&(Type, bool)> {
+    pub fn lookup(&self, id: &Identifier) -> Option<&(Type, TableEntry)> {
         self.symbols.get(id)
     }
 
@@ -115,8 +131,15 @@ impl SymbolTable {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Type {
     Int,
     Fn(i32)
+}
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum StorageClass {
+    Static,
+    Extern,
+    Auto,
 }

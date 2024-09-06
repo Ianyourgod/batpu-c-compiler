@@ -15,27 +15,52 @@ impl Emitter {
         }
     }
 
+    fn contains_main_function(&self) -> bool {
+        for tl in &self.program.statements {
+            match tl {
+                assembly::TopLevel::FuncDef(ref func) => {
+                    if func.name == "main" {
+                        return true;
+                    }
+                },
+                _ => {}
+            }
+        }
+        false
+    }
+
     pub fn emit(&self) -> String {
-        let mut output = "
+        let mut output = format!("
 ldi r14 239
 ldi r15 239
-cal .user_func_main
+{}
 ldi r2 250
 str r2 r1 0
 hlt
-.user_func_mem_read
+.mem_read
   lod r1 r1 0
   ret
-.user_func_mem_write
+.mem_write
   str r1 r2 0
   ret
-".to_string();
-        for func in &self.program.statements {
-            output.push_str(&format!(".user_func_{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
-            for instr in &func.body {
-                output.push_str(&format!("    {}\n", self.emit_instruction(instr)));
+", if self.contains_main_function() { "cal .main:global" } else { "" });
+        for tl in &self.program.statements {
+            match tl {
+                assembly::TopLevel::FuncDef(ref func) => {
+                    if func.global {
+                        output.push_str(":global\n");
+                    }
+                    output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
+                    for instr in &func.body {
+                        output.push_str(&format!("    {}\n", self.emit_instruction(instr)));
+                    }
+                    output.push_str("    ret\n");
+                },
+                #[allow(unused_variables)]
+                assembly::TopLevel::StaticVariable(ref name, global, init) => {
+                    todo!()
+                }
             }
-            output.push_str("    ret\n");
         }
 
         output
@@ -120,7 +145,7 @@ hlt
                 let src = self.emit_register(src);
                 if out_of_bounds {
                     // we add the difference to the offset
-                    res.push_str(&format!("{}\n    adi {} {}\n    ", i, src, diff));
+                    res.push_str(&format!("adi {} {}\n    ", src, diff));
                 }
                 res.push_str(&format!("lod {} {} {}", src, self.emit_register(dst), -i - diff*out_of_bounds as i16));
                 if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
@@ -155,7 +180,7 @@ hlt
                 format!(".{}", lbl)
             }
             assembly::Instruction::Call(ref lbl) => {
-                format!("cal .user_func_{}", lbl)
+                format!("cal .{}:global", lbl)
             }
         }
     }

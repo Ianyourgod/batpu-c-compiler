@@ -38,7 +38,7 @@ impl Parser {
         };
 
         while self.current_token != TokenType::EOF {
-            let stmt = self.parse_function_declaration();
+            let stmt = self.parse_declaration();
             program.statements.push(stmt);
             self.next_token();
         }
@@ -46,11 +46,65 @@ impl Parser {
         program
     }
 
-    fn parse_function_declaration(&mut self, ) -> nodes::FuncDecl {
-        if self.current_token != TokenType::Keyword("int".to_string()) {
-            panic!("Expected int, got {:?}", self.current_token);
+    fn parse_type_and_storage_class(&mut self, specifiers: Vec<TokenType>) -> (nodes::Type, nodes::StorageClass) {
+        let mut types: Vec<nodes::Type> = Vec::new();
+        let mut storage_classes: Vec<nodes::StorageClass> = Vec::new();
+
+        for specifier in specifiers {
+            let specifier = match specifier {
+                TokenType::Keyword(kwd) => kwd,
+                unknown => panic!("Expected keyword, found {:?}", unknown)
+            };
+
+            if &specifier == "int" {
+                types.push(nodes::Type::Int)
+            } else {
+                storage_classes.push(match specifier.as_str() {
+                    "extern" => nodes::StorageClass::Extern,
+                    "static" => nodes::StorageClass::Static,
+                    _ => unreachable!()
+                });
+            }
+        };
+
+        if types.len() != 1 {
+            panic!("Invalid type specifier, {:?}", types);
         }
-        self.next_token();
+        let st_cl_len = storage_classes.len();
+        if st_cl_len > 1 {
+            panic!("Invalid storage class");
+        }
+
+        let type_ = nodes::Type::Int;
+
+        let storage_class = if st_cl_len == 1 { storage_classes[0] } else { nodes::StorageClass::Auto };
+
+        return (type_, storage_class);
+    }
+
+    fn is_valid_var_starter(&mut self, token: &TokenType) -> bool {
+        match token {
+            TokenType::Keyword(kwd) => {
+                match kwd.as_str() {
+                    "int" => true,
+                    "extern" => true,
+                    "static" => true,
+                    _ => false,
+                }
+            },
+            _ => false,
+        }
+    }
+
+    fn parse_declaration(&mut self) -> nodes::Declaration {
+        let mut types: Vec<TokenType> = Vec::new();
+        while self.is_valid_var_starter(&self.current_token.clone()) {
+            types.push(self.current_token.clone());
+            self.next_token();
+        }
+
+        #[allow(unused_variables)]
+        let (type_, class_specifier) = self.parse_type_and_storage_class(types);
 
         let name = match self.current_token {
             TokenType::Identifier(ref s) => s.clone(),
@@ -58,55 +112,80 @@ impl Parser {
         };
         self.next_token();
 
-        self.consume(TokenType::LParen);
+        if self.current_token == TokenType::LParen {
+            let mut args: Vec<nodes::Identifier> = Vec::new();
 
-        let mut args: Vec<nodes::Identifier> = Vec::new();
-
-        while self.current_token != TokenType::RParen {
-            if self.current_token != TokenType::Keyword("int".to_string()) {
-                panic!("Expected type, got {:?}", self.current_token);
-            }
             self.next_token();
-            let arg = self.parse_lvalue();
-            args.push(arg);
-            if self.current_token == TokenType::Comma {
+            while self.current_token != TokenType::RParen {
+                if self.current_token != TokenType::Keyword("int".to_string()) {
+                    panic!("Expected type, got {:?}", self.current_token);
+                }
                 self.next_token();
-            } else if self.current_token != TokenType::RParen {
-                panic!("Expected ',' or ')', got {:?}", self.current_token);
+                let arg = self.parse_lvalue();
+                args.push(arg);
+                if self.current_token == TokenType::Comma {
+                    self.next_token();
+                } else if self.current_token != TokenType::RParen {
+                    panic!("Expected ',' or ')', got {:?}", self.current_token);
+                }
             }
-        }
+    
+            self.next_token();
 
-        self.next_token();
-
-        if self.current_token != TokenType::LBrace {
-            panic!("Expected '{{', got {:?}", self.current_token);
-        }
-        self.next_token();
-
-        let mut body: Vec<nodes::BlockItem> = Vec::new();
-
-        while self.current_token != TokenType::RBrace {
-            let stmt = self.parse_block_item();
-            body.push(stmt);
-        }
-
-        nodes::FuncDecl {
-            name,
-            params: args,
-            body,
+            if self.current_token == TokenType::Semicolon {
+                return nodes::Declaration::FuncDecl(nodes::FuncDecl {
+                    name,
+                    params: args,
+                    body: Vec::new(),
+                    storage_class: class_specifier,
+                })
+            }
+    
+            self.consume(TokenType::LBrace);
+    
+            let mut body: Vec<nodes::BlockItem> = Vec::new();
+    
+            while self.current_token != TokenType::RBrace {
+                let stmt = self.parse_block_item();
+                body.push(stmt);
+            }
+    
+            nodes::Declaration::FuncDecl(nodes::FuncDecl {
+                name,
+                params: args,
+                body,
+                storage_class: class_specifier,
+            })
+        } else {
+            if self.current_token == TokenType::Semicolon {
+                self.next_token();
+                nodes::Declaration::VarDecl(nodes::VarDecl {
+                    name: nodes::Identifier { name },
+                    expr: None,
+                    storage_class: class_specifier,
+                })
+            } else if self.current_token == TokenType::Equals {
+                self.next_token();
+                let expr = self.parse_expression(0);
+                if self.current_token != TokenType::Semicolon {
+                    panic!("Expected semicolon, got {:?}", self.current_token);
+                }
+                self.next_token();
+                nodes::Declaration::VarDecl(nodes::VarDecl {
+                    name: nodes::Identifier { name },
+                    expr: Some(expr),
+                    storage_class: class_specifier,
+                })
+            } else {
+                panic!("Unexpected token: {:?}", self.current_token);
+            }
         }
     }
 
     fn parse_block_item(&mut self) -> nodes::BlockItem {
-        match self.current_token {
-            TokenType::Keyword(ref keyword) => {
-                match keyword.as_str() {
-                    "int" => nodes::BlockItem::Declaration(self.parse_declaration()),
-                    _ => nodes::BlockItem::Statement(self.parse_statement())
-                }
-            },
-            _ => nodes::BlockItem::Statement(self.parse_statement())
-        }
+        if self.is_valid_var_starter(&self.current_token.clone()) {
+            nodes::BlockItem::Declaration(self.parse_declaration())
+        } else { nodes::BlockItem::Statement(self.parse_statement()) }
     }
 
     fn parse_statement(&mut self) -> nodes::Statement {
@@ -165,36 +244,6 @@ impl Parser {
                 nodes::Identifier { name: s }
             },
             _ => panic!("Expected lvalue, got {:?}", self.current_token),
-        }
-    }
-
-    fn parse_declaration(&mut self) -> nodes::Declaration {
-        if self.current_token != TokenType::Keyword("int".to_string()) {
-            panic!("Expected int, got {:?}", self.current_token);
-        }
-        self.next_token();
-
-        let name = self.parse_lvalue();
-
-        if self.current_token == TokenType::Semicolon {
-            self.next_token();
-            nodes::Declaration::VarDecl(nodes::VarDecl {
-                name,
-                expr: None
-            })
-        } else if self.current_token == TokenType::Equals {
-            self.next_token();
-            let expr = self.parse_expression(0);
-            if self.current_token != TokenType::Semicolon {
-                panic!("Expected semicolon, got {:?}", self.current_token);
-            }
-            self.next_token();
-            nodes::Declaration::VarDecl(nodes::VarDecl {
-                name,
-                expr: Some(expr)
-            })
-        } else {
-            panic!("Unexpected token: {:?}", self.current_token);
         }
     }
 

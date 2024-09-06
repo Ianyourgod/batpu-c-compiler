@@ -1,22 +1,37 @@
+use std::collections::HashMap;
+
 use crate::code_gen::assembly;
 
 pub struct InstructionFixupPass {
     program: assembly::Program,
+    static_table: HashMap<String, u8>,
+    static_counter: u8,
 }
 
 impl InstructionFixupPass {
     pub fn new(program: assembly::Program) -> InstructionFixupPass {
         InstructionFixupPass {
             program,
+            static_table: HashMap::new(),
+            static_counter: 0,
         }
     }
 
     pub fn generate(&self) -> assembly::Program {
+
         let mut assembly = assembly::Program {
             statements: Vec::new(),
         };
 
         for stmt in &self.program.statements {
+            let stmt = match stmt {
+                assembly::TopLevel::FuncDef(func) => func,
+                assembly::TopLevel::StaticVariable(name, global, init) => {
+                    assembly.statements.push(assembly::TopLevel::StaticVariable(name.clone(), *global, init.clone()));
+                    continue;
+                },
+            };
+
             self.generate_function(stmt, &mut assembly);
         }
 
@@ -36,9 +51,10 @@ impl InstructionFixupPass {
             name: func.name.clone(),
             body: instrs,
             stack_size: func.stack_size,
+            global: func.global,
         };
 
-        program.statements.push(func);
+        program.statements.push(assembly::TopLevel::FuncDef(func));
     }
 
     fn is_register(&self, op: &assembly::Operand) -> (bool, assembly::Register) {
@@ -64,6 +80,14 @@ impl InstructionFixupPass {
                     reg.clone()
                 ));
             },
+            assembly::Operand::Data(name) => {
+                let static_offset = self.static_table.get(name).unwrap();
+                instructions.push(assembly::Instruction::Lod(
+                    assembly::Register::new("r0".to_string()),
+                    *static_offset as i16,
+                    reg.clone()
+                ));
+            }
         }
     }
 

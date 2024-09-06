@@ -11,6 +11,47 @@ pub struct VariableResolution {
 struct VarData {
     name: String,
     has_expr: bool,
+    has_external_linkage: bool,
+    from_current_scope: bool,
+}
+
+struct VariableMap {
+    pub map: HashMap<nodes::Identifier, VarData>
+}
+
+impl VariableMap {
+    pub fn new() -> VariableMap {
+        VariableMap {
+            map: HashMap::new()
+        }
+    }
+
+    pub fn clone(&mut self) -> VariableMap {
+        let mut new_map: HashMap<nodes::Identifier, VarData> = HashMap::new();
+        
+        for (key, value) in self.map.iter() {
+            new_map.insert(key.clone(), VarData {
+                name: value.name.clone(),
+                has_expr: value.has_expr,
+                has_external_linkage: value.has_external_linkage,
+                from_current_scope: false,
+            });
+        }
+
+        VariableMap { map: new_map }
+    }
+
+    pub fn insert(&mut self, k: nodes::Identifier, v: VarData) {
+        self.map.insert(k, v);
+    }
+
+    pub fn contains_key(&self, k: &nodes::Identifier) -> bool {
+        self.map.contains_key(k)
+    }
+
+    pub fn get(&self, k: &nodes::Identifier) -> Option<&VarData> {
+        self.map.get(k)
+    }
 }
 
 impl VariableResolution {
@@ -22,37 +63,76 @@ impl VariableResolution {
     }
 
     pub fn resolve(&mut self) -> nodes::Program {
-        let mut statements: Vec<nodes::FuncDecl> = Vec::new();
+        let mut statements: Vec<nodes::Declaration> = Vec::new();
 
-        let mut global_var_map: HashMap<nodes::Identifier, VarData> = HashMap::new();
+        let mut global_var_map = VariableMap::new();
 
-        for func in self.program.statements.clone() {
-            global_var_map.insert(nodes::Identifier { name: func.name.clone() }, VarData { name: func.name.clone(), has_expr: func.body.len() > 0 });
-            let mut body: Vec<nodes::BlockItem> = Vec::new();
-            let mut variable_map = global_var_map.clone();
-            let mut params: Vec<nodes::Identifier> = Vec::with_capacity(func.params.len());
+        for decl in self.program.statements.clone() {
+            match decl {
+                nodes::Declaration::FuncDecl(func) => {
+                    let func = self.resolve_function_declaration(&func, &mut global_var_map);
 
-            for param in func.params {
-                let unique_name = self.generate_unique_name("arg", param.name.clone());
-                variable_map.insert(param, VarData { name: unique_name.clone(), has_expr: false });
-                params.push(nodes::Identifier { name: unique_name });
+                    statements.push(nodes::Declaration::FuncDecl(func));
+                },
+                nodes::Declaration::VarDecl(var_decl) => {
+                    let decl = self.resolve_file_scope_declaration(&var_decl, &mut global_var_map);
+
+                    statements.push(decl);
+                }
             }
-
-            for instr in &func.body {
-                body.push(self.resolve_block_item(instr, &mut variable_map));
-            }
-
-            let func = nodes::FuncDecl {
-                name: func.name.clone(),
-                params,
-                body,
-            };
-
-            statements.push(func);
         }
 
         nodes::Program {
             statements,
+        }
+    }
+
+    fn resolve_function_declaration(&mut self, decl: &nodes::FuncDecl, variable_map: &mut VariableMap) -> nodes::FuncDecl {
+        let decl_name = nodes::Identifier { name: decl.name.clone() };
+        if variable_map.contains_key(&decl_name) {
+            let old_decl = variable_map.get(&decl_name).unwrap();
+            if old_decl.from_current_scope && !old_decl.has_external_linkage {
+                panic!("Function {:?} already declared", decl_name);
+            }
+        }
+
+        variable_map.insert(decl_name, VarData {
+            name: decl.name.clone(),
+            has_expr: decl.body.len() > 0,
+            has_external_linkage: true,
+            from_current_scope: true,
+        });
+
+        let mut inner_map = variable_map.clone();
+        let mut new_params: Vec<nodes::Identifier> = Vec::with_capacity(decl.params.len());
+
+        for param in decl.params.clone() {
+            if variable_map.contains_key(&param) {
+                panic!("Variable {:?} already declared", param);
+            }
+            
+            let unique_name = self.generate_unique_name("arg", param.name.clone());
+            inner_map.insert(param.clone(), VarData {
+                name: unique_name.clone(),
+                has_expr: false,
+                has_external_linkage: false,
+                from_current_scope: true,
+            });
+            new_params.push(nodes::Identifier { name: unique_name });
+        }
+
+        let mut new_body: Vec<nodes::BlockItem> = Vec::new();
+        if decl.body.len() > 0 {
+            for stmt in decl.body.clone() {
+                new_body.push(self.resolve_block_item(&stmt, &mut inner_map));
+            }
+        }
+
+        nodes::FuncDecl {
+            name: decl.name.clone(),
+            params: new_params,
+            body: new_body,
+            storage_class: decl.storage_class.clone(),
         }
     }
 
@@ -62,21 +142,50 @@ impl VariableResolution {
         name
     }
 
-    fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, variable_map: &mut HashMap<nodes::Identifier, VarData>) -> nodes::BlockItem {
+    fn resolve_file_scope_declaration(&mut self, decl: &nodes::VarDecl, variable_map: &mut VariableMap) -> nodes::Declaration {
+        variable_map.insert(decl.name.clone(), VarData {
+            name: decl.name.name.clone(),
+            has_expr: decl.expr.is_some(),
+            from_current_scope: true,
+            has_external_linkage: true,
+        });
+
+        nodes::Declaration::VarDecl(decl.clone())
+    }
+
+    fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, variable_map: &mut VariableMap) -> nodes::BlockItem {
         match stmt {
             nodes::BlockItem::Statement(ref inner_stmt) => nodes::BlockItem::Statement(self.resolve_statement(inner_stmt, variable_map)),
             nodes::BlockItem::Declaration(ref decl) => {
                 match decl {
                     nodes::Declaration::VarDecl(decl) => {
                         if variable_map.contains_key(&decl.name) {
-                            panic!("Variable {:?} already declared", decl.name);
+                            let old_decl = variable_map.get(&decl.name).unwrap();
+                            if old_decl.from_current_scope && !(old_decl.has_external_linkage && decl.storage_class == nodes::StorageClass::Extern) {
+                                panic!("Conflicting local declarations of variable {:?}", decl.name);
+                            }
+                        }
+
+                        if decl.storage_class == nodes::StorageClass::Extern {
+                            variable_map.insert(decl.name.clone(), VarData {
+                                name: decl.name.name.clone(),
+                                has_expr: decl.expr.is_some(),
+                                from_current_scope: true,
+                                has_external_linkage: true,
+                            });
+                            return nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(decl.clone()));
                         }
         
                         let orig_name = decl.name.clone();
         
                         let unique_name = self.generate_unique_name("var", orig_name.name);
-        
-                        variable_map.insert(decl.name.clone(), VarData { name: unique_name.clone(), has_expr: decl.expr.is_some() });
+
+                        variable_map.insert(decl.name.clone(), VarData {
+                            name: unique_name.clone(),
+                            has_expr: decl.expr.is_some(),
+                            from_current_scope: true,
+                            has_external_linkage: false,
+                        });
         
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
@@ -84,6 +193,7 @@ impl VariableResolution {
                             nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
                                 name: nodes::Identifier { name: unique_name },
                                 expr: Some(val),
+                                storage_class: decl.storage_class,
                             }))
                         } else {
                             nodes::BlockItem::Statement(nodes::Statement::Empty)
@@ -98,7 +208,7 @@ impl VariableResolution {
         }
     }
 
-    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &mut HashMap<nodes::Identifier, VarData>) -> nodes::Statement {
+    fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &mut VariableMap) -> nodes::Statement {
         match stmt {
             nodes::Statement::Return(ref expr) => {
                 let val = self.resolve_expression(expr, variable_map);
@@ -147,9 +257,15 @@ impl VariableResolution {
                                 Some(ref expr) => Some(self.resolve_expression(expr, variable_map)),
                                 None => None,
                             },
+                            storage_class: decl.storage_class.clone(),
                         };
                         let var = decl.name.clone();
-                        variable_map.insert(var.clone(), VarData { name: var.name, has_expr: decl.expr.is_some() });
+                        variable_map.insert(var.clone(), VarData {
+                            name: var.name,
+                            has_expr: decl.expr.is_some(),
+                            has_external_linkage: decl.storage_class == nodes::StorageClass::Extern,
+                            from_current_scope: true,
+                        });
                         nodes::ForInit::Declaration(nodes::Declaration::VarDecl(decl))
                     },
                     nodes::ForInit::Expression(ref expr) => {
@@ -184,7 +300,7 @@ impl VariableResolution {
         }
     }
 
-    fn resolve_expression(&mut self, expr: &nodes::Expression, variable_map: &HashMap<nodes::Identifier, VarData>) -> nodes::Expression {
+    fn resolve_expression(&mut self, expr: &nodes::Expression, variable_map: &VariableMap) -> nodes::Expression {
         match expr {
             nodes::Expression::Binop(ref op, ref src1, ref src2) => {
                 let src1 = self.resolve_expression(src1, variable_map);

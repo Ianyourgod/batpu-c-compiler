@@ -1,6 +1,12 @@
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub statements: Vec<FuncDef>,
+    pub statements: Vec<TopLevel>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TopLevel {
+    FuncDef(FuncDef),
+    StaticVariable(String, bool, i32),
 }
 
 #[derive(Debug, Clone)]
@@ -8,6 +14,7 @@ pub struct FuncDef {
     pub name: String,
     pub params: Vec<String>,
     pub body: Vec<Instruction>,
+    pub global: bool,
 }
 
 #[derive(Debug, Clone)]

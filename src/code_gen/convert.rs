@@ -42,7 +42,10 @@ impl ConvertPass {
         };
 
         for stmt in self.program.statements.clone() {
-            self.generate_function(&stmt, &mut assembly);
+            match stmt {
+                definition::TopLevel::FuncDef(ref func) => self.generate_function(func, &mut assembly),
+                definition::TopLevel::StaticVariable(name, global, init) => self.generate_static_variable(name, global, init, &mut assembly),
+            }
         }
 
         assembly
@@ -72,9 +75,14 @@ impl ConvertPass {
             name: func.name.clone(),
             body: instrs,
             stack_size: 0,
+            global: func.global,
         };
 
-        program.statements.push(func);
+        program.statements.push(assembly::TopLevel::FuncDef(func));
+    }
+
+    fn generate_static_variable(&mut self, name: String, global: bool, init: i32, program: &mut assembly::Program) {
+        program.statements.push(assembly::TopLevel::StaticVariable(name, global, init));
     }
 
     fn generate_label(&mut self, label: String) -> String {
@@ -159,6 +167,48 @@ impl ConvertPass {
                 ));
             },
             definition::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
+                match op {
+                    definition::Binop::GreaterThan => {
+                        instructions.push(assembly::Instruction::Cmp(
+                            self.convert_val(src1),
+                            self.convert_val(src2)
+                        ));
+                        let false_label = self.generate_label("false".to_string());
+                        let end_label = self.generate_label("end".to_string());
+
+                        let dst = self.convert_val(dst);
+
+                        instructions.push(assembly::Instruction::JmpCC(assembly::CondCode::Equal, false_label.clone()));
+                        instructions.push(assembly::Instruction::JmpCC(assembly::CondCode::LessThan, false_label.clone()));
+                        instructions.push(assembly::Instruction::Mov(assembly::Operand::Immediate(1), dst.clone()));
+                        instructions.push(assembly::Instruction::Jmp(end_label.clone()));
+                        instructions.push(assembly::Instruction::Label(false_label));
+                        instructions.push(assembly::Instruction::Mov(assembly::Operand::Immediate(0), dst.clone()));
+                        instructions.push(assembly::Instruction::Label(end_label));
+                        return;
+                    },
+                    definition::Binop::LessThanEqual => {
+                        instructions.push(assembly::Instruction::Cmp(
+                            self.convert_val(src1),
+                            self.convert_val(src2)
+                        ));
+                        let true_label = self.generate_label("true".to_string());
+                        let end_label = self.generate_label("end".to_string());
+
+                        let dst = self.convert_val(dst);
+
+                        instructions.push(assembly::Instruction::JmpCC(assembly::CondCode::Equal, true_label.clone()));
+                        instructions.push(assembly::Instruction::JmpCC(assembly::CondCode::LessThan, true_label.clone()));
+                        instructions.push(assembly::Instruction::Mov(assembly::Operand::Immediate(0), dst.clone()));
+                        instructions.push(assembly::Instruction::Jmp(end_label.clone()));
+                        instructions.push(assembly::Instruction::Label(true_label));
+                        instructions.push(assembly::Instruction::Mov(assembly::Operand::Immediate(1), dst.clone()));
+                        instructions.push(assembly::Instruction::Label(end_label));
+                        return;
+                    },
+                    _ => ()
+                }
+                
                 if self.is_comparison(op) {
                     instructions.push(assembly::Instruction::Cmp(
                         self.convert_val(src1),

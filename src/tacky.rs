@@ -5,42 +5,78 @@ use crate::parser::nodes;
 pub struct Tacky {
     program: nodes::Program,
     temp_count: i32,
+    symbol_table: nodes::SymbolTable,
 }
 
 impl Tacky {
-    pub fn new(program: nodes::Program) -> Tacky {
+    pub fn new(program: nodes::Program, symbol_table: nodes::SymbolTable) -> Tacky {
         Tacky {
             program,
             temp_count: 0,
+            symbol_table,
         }
     }
 
     pub fn emit(&mut self) -> definition::Program {
-        let mut statements: Vec<definition::FuncDef> = Vec::new();
+        let mut statements: Vec<definition::TopLevel> = Vec::new();
 
-        for func in self.program.statements.clone() {
-            if func.body.len() == 0 {
-                continue;
+        for decl in self.program.statements.clone() {
+            match decl {
+                nodes::Declaration::VarDecl(var) => {
+                    let name = var.name.name.clone();
+
+                    let table_entry = self.symbol_table.lookup(&nodes::Identifier { name: name.clone() }).unwrap();
+
+                    let (global, init) = match table_entry.1 {
+                        nodes::TableEntry::StaticAttr(ref init, global) => (global, init),
+                        _ => panic!("Expected StaticAttr, got {:?}", table_entry.1),
+                    };
+
+                    let val = match init {
+                        nodes::InitialValue::NoInit => continue,
+                        nodes::InitialValue::Initial(val) => *val,
+                        nodes::InitialValue::Tentative => 0,
+                    };
+
+                    statements.push(definition::TopLevel::StaticVariable(
+                        name,
+                        global,
+                        val,
+                    ));
+                }
+                nodes::Declaration::FuncDecl(func) => {
+                    if func.body.len() == 0 {
+                        continue;
+                    }
+
+                    let mut body: Vec<definition::Instruction> = Vec::new();
+                    let mut params: Vec<String> = Vec::with_capacity(func.params.len());
+                    
+                    for param in &func.params {
+                        params.push(param.name.clone());
+                    }
+                    
+                    for instr in &func.body {
+                        self.emit_block_item(instr, &mut body);
+                    }
+
+                    let table_entry = self.symbol_table.lookup(&nodes::Identifier { name: func.name.clone() }).unwrap();
+
+                    let global = match table_entry.1 {
+                        nodes::TableEntry::FnAttr(_, global) => global,
+                        _ => panic!("Expected FnAttr, got {:?}", table_entry.1),
+                    };
+
+                    let func = definition::FuncDef {
+                        name: func.name.clone(),
+                        params,
+                        body,
+                        global,
+                    };
+
+                    statements.push(definition::TopLevel::FuncDef(func));
+                }
             }
-
-            let mut body: Vec<definition::Instruction> = Vec::new();
-            let mut params: Vec<String> = Vec::with_capacity(func.params.len());
-            
-            for param in &func.params {
-                params.push(param.name.clone());
-            }
-            
-            for instr in &func.body {
-                self.emit_block_item(instr, &mut body);
-            }
-
-            let func = definition::FuncDef {
-                name: func.name.clone(),
-                params,
-                body,
-            };
-
-            statements.push(func);
         }
 
         definition::Program {
