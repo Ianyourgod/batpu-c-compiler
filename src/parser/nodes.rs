@@ -11,6 +11,7 @@ pub struct FuncDecl {
     pub params: Vec<Identifier>,
     pub body: Vec<BlockItem>,
     pub storage_class: StorageClass,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +46,7 @@ pub struct VarDecl {
     pub name: Identifier,
     pub expr: Option<Expression>,
     pub storage_class: StorageClass,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -59,7 +61,22 @@ pub enum BlockItem {
 }
 
 #[derive(Debug, Clone)]
-pub enum Expression {
+pub struct Expression {
+    pub expr: ExpressionEnum,
+    pub ty: Type,
+}
+
+impl Expression {
+    pub fn new(expr: ExpressionEnum) -> Self {
+        Expression {
+            expr,
+            ty: Type::Int,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ExpressionEnum {
     IntegerLiteral(i8),
     Unop(Unop, Box<Expression>),
     Binop(Binop, Box<Expression>, Box<Expression>),
@@ -71,14 +88,14 @@ pub enum Expression {
     FunctionCall(String, Vec<Expression>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Unop {
     Negate,
     BitwiseNot,
     LogicalNot,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Binop {
     Add,
     Subtract,
@@ -131,10 +148,10 @@ impl SymbolTable {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int,
-    Fn(i32)
+    Fn(Vec<Type>, Box<Type>),
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

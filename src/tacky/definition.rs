@@ -1,3 +1,5 @@
+pub use crate::parser::nodes::Type;
+
 #[derive(Debug, Clone)]
 pub struct Program {
     pub statements: Vec<TopLevel>,
@@ -6,7 +8,7 @@ pub struct Program {
 #[derive(Debug, Clone)]
 pub enum TopLevel {
     FuncDef(FuncDef),
-    StaticVariable(String, bool, i32),
+    StaticVariable(String, bool, Type, i32),
 }
 
 #[derive(Debug, Clone)]

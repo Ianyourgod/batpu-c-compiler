@@ -39,6 +39,7 @@ impl LoopLabeling {
                 params,
                 body,
                 storage_class: func.storage_class.clone(),
+                ty: func.ty.clone(),
             };
 
             statements.push(nodes::Declaration::FuncDecl(func));

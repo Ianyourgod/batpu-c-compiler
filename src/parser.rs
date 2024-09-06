@@ -46,7 +46,7 @@ impl Parser {
         program
     }
 
-    fn parse_type_and_storage_class(&mut self, specifiers: Vec<TokenType>) -> (nodes::Type, nodes::StorageClass) {
+    fn parse_type_and_storage_class(&self, specifiers: Vec<TokenType>) -> (nodes::Type, nodes::StorageClass) {
         let mut types: Vec<nodes::Type> = Vec::new();
         let mut storage_classes: Vec<nodes::StorageClass> = Vec::new();
 
@@ -56,14 +56,11 @@ impl Parser {
                 unknown => panic!("Expected keyword, found {:?}", unknown)
             };
 
-            if &specifier == "int" {
-                types.push(nodes::Type::Int)
-            } else {
-                storage_classes.push(match specifier.as_str() {
-                    "extern" => nodes::StorageClass::Extern,
-                    "static" => nodes::StorageClass::Static,
-                    _ => unreachable!()
-                });
+            match specifier.as_str() {
+                "int" => types.push(nodes::Type::Int),
+                "extern" => storage_classes.push(nodes::StorageClass::Extern),
+                "static" => storage_classes.push(nodes::StorageClass::Static),
+                _ => panic!("Invalid type specifier, {:?}", specifier),
             }
         };
 
@@ -82,7 +79,7 @@ impl Parser {
         return (type_, storage_class);
     }
 
-    fn is_valid_var_starter(&mut self, token: &TokenType) -> bool {
+    fn is_valid_var_starter(&self, token: &TokenType) -> bool {
         match token {
             TokenType::Keyword(kwd) => {
                 match kwd.as_str() {
@@ -115,22 +112,35 @@ impl Parser {
         if self.current_token == TokenType::LParen {
             let mut args: Vec<nodes::Identifier> = Vec::new();
 
+            let mut param_types: Vec<nodes::Type> = Vec::new();
+
             self.next_token();
             while self.current_token != TokenType::RParen {
-                if self.current_token != TokenType::Keyword("int".to_string()) {
+                // parse type, then name, then comma
+                if !self.is_valid_var_starter(&self.current_token) {
                     panic!("Expected type, got {:?}", self.current_token);
                 }
-                self.next_token();
-                let arg = self.parse_lvalue();
-                args.push(arg);
-                if self.current_token == TokenType::Comma {
+
+                let mut types: Vec<TokenType> = Vec::new();
+                while self.is_valid_var_starter(&self.current_token) {
+                    types.push(self.current_token.clone());
                     self.next_token();
-                } else if self.current_token != TokenType::RParen {
-                    panic!("Expected ',' or ')', got {:?}", self.current_token);
                 }
+
+                let (type_, _) = self.parse_type_and_storage_class(types);
+
+                let name = match self.current_token {
+                    TokenType::Identifier(ref s) => s.clone(),
+                    _ => panic!("Expected identifier, got {:?}", self.current_token),
+                };
+
+                args.push(nodes::Identifier { name });
+                param_types.push(type_);
             }
     
             self.next_token();
+
+            let ty = nodes::Type::Fn(param_types, Box::new(type_));
 
             if self.current_token == TokenType::Semicolon {
                 return nodes::Declaration::FuncDecl(nodes::FuncDecl {
@@ -138,6 +148,7 @@ impl Parser {
                     params: args,
                     body: Vec::new(),
                     storage_class: class_specifier,
+                    ty,
                 })
             }
     
@@ -155,6 +166,7 @@ impl Parser {
                 params: args,
                 body,
                 storage_class: class_specifier,
+                ty,
             })
         } else {
             if self.current_token == TokenType::Semicolon {
@@ -163,6 +175,7 @@ impl Parser {
                     name: nodes::Identifier { name },
                     expr: None,
                     storage_class: class_specifier,
+                    ty: type_,
                 })
             } else if self.current_token == TokenType::Equals {
                 self.next_token();
@@ -175,6 +188,7 @@ impl Parser {
                     name: nodes::Identifier { name },
                     expr: Some(expr),
                     storage_class: class_specifier,
+                    ty: type_,
                 })
             } else {
                 panic!("Unexpected token: {:?}", self.current_token);
@@ -353,24 +367,24 @@ impl Parser {
     }
 
     fn parse_unop(&mut self) -> nodes::Expression {
-        match self.current_token {
+        nodes::Expression::new(match self.current_token {
             TokenType::Tilde => {
                 self.next_token();
                 let expr = self.parse_factor();
-                nodes::Expression::Unop(nodes::Unop::BitwiseNot, Box::new(expr))
+                nodes::ExpressionEnum::Unop(nodes::Unop::BitwiseNot, Box::new(expr))
             }
             TokenType::Minus => {
                 self.next_token();
                 let expr = self.parse_factor();
-                nodes::Expression::Unop(nodes::Unop::Negate, Box::new(expr))
+                nodes::ExpressionEnum::Unop(nodes::Unop::Negate, Box::new(expr))
             }
             TokenType::LogicalNot => {
                 self.next_token();
                 let expr = self.parse_factor();
-                nodes::Expression::Unop(nodes::Unop::LogicalNot, Box::new(expr))
+                nodes::ExpressionEnum::Unop(nodes::Unop::LogicalNot, Box::new(expr))
             }
             _ => panic!("Unknown token: {:?}", self.current_token),
-        }
+        })
     }
 
     fn get_precedence(&self, token: &TokenType) -> i32 {
@@ -422,29 +436,39 @@ impl Parser {
         while (prec = self.get_precedence(&self.current_token), prec).1 >= min_prec {
             if self.current_token == TokenType::Equals {
                 self.next_token();
-                expr = nodes::Expression::Assign(Box::new(expr), Box::new(self.parse_expression(prec)));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::Assign(Box::new(expr), Box::new(self.parse_expression(prec))));
             // more fuckery :tongue:
             } else if (is_op_assign = self.is_op_assign(&self.current_token), is_op_assign.0).1 {
                 self.next_token();
-                expr = nodes::Expression::Assign(Box::new(expr.clone()), Box::new(nodes::Expression::Binop(is_op_assign.1, Box::new(expr), Box::new(self.parse_expression(prec)))))
+                expr = nodes::Expression::new(
+                    nodes::ExpressionEnum::Assign(
+                        Box::new(expr.clone()),
+                        Box::new(nodes::Expression::new(
+                            nodes::ExpressionEnum::Binop(
+                                is_op_assign.1,Box::new(expr),
+                                Box::new(self.parse_expression(prec))
+                            )
+                        ))
+                    )
+                );
             } else if self.current_token == TokenType::QuestionMark {
                 self.next_token();
                 let middle = self.parse_expression(0);
                 self.consume(TokenType::Colon);
                 let right = self.parse_expression(prec);
-                expr = nodes::Expression::Conditional(Box::new(expr), Box::new(middle), Box::new(right));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::Conditional(Box::new(expr), Box::new(middle), Box::new(right)));
             } else if self.current_token == TokenType::Increment || self.current_token == TokenType::Decrement {
                 if self.current_token == TokenType::Increment {
-                    expr = nodes::Expression::Increment(Box::new(expr));
+                    expr = nodes::Expression::new(nodes::ExpressionEnum::Increment(Box::new(expr)));
                 } else {
-                    expr = nodes::Expression::Decrement(Box::new(expr));
+                    expr = nodes::Expression::new(nodes::ExpressionEnum::Decrement(Box::new(expr)));
                 }
                 self.next_token();
             } else {
                 let op = self.convert_binop(&self.current_token);
                 self.next_token();
                 let right = self.parse_expression(prec + 1);
-                expr = nodes::Expression::Binop(op, Box::new(expr), Box::new(right));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::Binop(op, Box::new(expr), Box::new(right)));
             }
         }
 
@@ -456,7 +480,7 @@ impl Parser {
         match cur_tok {
             TokenType::IntegerLiteral(i) => {
                 self.next_token();
-                nodes::Expression::IntegerLiteral(i)
+                nodes::Expression::new(nodes::ExpressionEnum::IntegerLiteral(i))
             }
             TokenType::Identifier(ident) => {
                 self.next_token();
@@ -472,9 +496,9 @@ impl Parser {
                         }
                     }
                     self.next_token();
-                    nodes::Expression::FunctionCall(ident, args)
+                    nodes::Expression::new(nodes::ExpressionEnum::FunctionCall(ident, args))
                 } else {
-                    nodes::Expression::Var(nodes::Identifier { name: ident })
+                    nodes::Expression::new(nodes::ExpressionEnum::Var(nodes::Identifier { name: ident }))
                 }
             }
             TokenType::Tilde | TokenType::Minus |

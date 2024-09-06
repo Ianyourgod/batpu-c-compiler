@@ -44,7 +44,7 @@ impl ConvertPass {
         for stmt in self.program.statements.clone() {
             match stmt {
                 definition::TopLevel::FuncDef(ref func) => self.generate_function(func, &mut assembly),
-                definition::TopLevel::StaticVariable(name, global, init) => self.generate_static_variable(name, global, init, &mut assembly),
+                definition::TopLevel::StaticVariable(name, global, _ty, init) => self.generate_static_variable(name, global, init, &mut assembly),
             }
         }
 

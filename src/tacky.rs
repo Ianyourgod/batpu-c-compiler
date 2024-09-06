@@ -41,6 +41,7 @@ impl Tacky {
                     statements.push(definition::TopLevel::StaticVariable(
                         name,
                         global,
+                        var.ty.clone(),
                         val,
                     ));
                 }
@@ -97,7 +98,7 @@ impl Tacky {
                         // this is just assignment
                         let expr = decl.expr.as_ref().unwrap();
                         
-                        let val = self.emit_expression(expr, body);
+                        let val = self.emit_expression(&expr.expr, body);
                         let name = decl.name.name.clone();
 
                         body.push(definition::Instruction::Copy(definition::Val::Var(name), val));
@@ -112,15 +113,15 @@ impl Tacky {
     fn emit_statement(&mut self, stmt: &nodes::Statement, body: &mut Vec<definition::Instruction>) {
         match stmt {
             nodes::Statement::Return(ref expr) => {
-                let val = self.emit_expression(expr, body);
+                let val = self.emit_expression(&expr.expr, body);
                 body.push(definition::Instruction::Return(val));
             }
             nodes::Statement::Expression(ref expr) => {
-                self.emit_expression(expr, body);
+                self.emit_expression(&expr.expr, body);
             }
             nodes::Statement::If(cond, then, else_) => {
                 let end_label = self.make_temporary();
-                let val = self.emit_expression(cond, body);
+                let val = self.emit_expression(&cond.expr, body);
                 body.push(definition::Instruction::JumpIfZero(val, end_label.clone()));
                 self.emit_statement(then, body);
                 if else_.is_some() {
@@ -148,7 +149,7 @@ impl Tacky {
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
                 body.push(definition::Instruction::Label(continue_label.clone()));
-                let val = self.emit_expression(cond, body);
+                let val = self.emit_expression(&cond.expr, body);
                 body.push(definition::Instruction::JumpIfZero(val, break_label.clone()));
                 self.emit_statement(loop_body, body);
                 body.push(definition::Instruction::Jump(continue_label.clone()));
@@ -159,7 +160,7 @@ impl Tacky {
                 let break_label = format!("{}.break", label);
                 body.push(definition::Instruction::Label(continue_label.clone()));
                 self.emit_statement(loop_body, body);
-                let val = self.emit_expression(cond, body);
+                let val = self.emit_expression(&cond.expr, body);
                 body.push(definition::Instruction::JumpIfNotZero(val, continue_label.clone()));
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
@@ -175,24 +176,24 @@ impl Tacky {
 
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            let val = self.emit_expression(expr, body);
+                            let val = self.emit_expression(&expr.expr, body);
                             let name = decl.name.name.clone();
                             body.push(definition::Instruction::Copy(definition::Val::Var(name), val));
                         }
                     }
                     nodes::ForInit::Expression(ref expr) => {
-                        self.emit_expression(expr, body);
+                        self.emit_expression(&expr.expr, body);
                     }
                     nodes::ForInit::Empty => {}
                 }
                 body.push(definition::Instruction::Label(continue_label.clone()));
                 if cond.is_some() {
-                    let val = self.emit_expression(cond.as_ref().unwrap(), body);
+                    let val = self.emit_expression(&cond.as_ref().unwrap().expr, body);
                     body.push(definition::Instruction::JumpIfZero(val, break_label.clone()));
                 }
                 self.emit_statement(loop_body, body);
                 if post.is_some() {
-                    self.emit_expression(post.as_ref().unwrap(), body);
+                    self.emit_expression(&post.as_ref().unwrap().expr, body);
                 }
                 body.push(definition::Instruction::Jump(continue_label.clone()));
                 body.push(definition::Instruction::Label(break_label.clone()));
@@ -230,13 +231,13 @@ impl Tacky {
         }
     }
 
-    fn emit_expression(&mut self, expr: &nodes::Expression, body: &mut Vec<definition::Instruction>) -> definition::Val {
+    fn emit_expression(&mut self, expr: &nodes::ExpressionEnum, body: &mut Vec<definition::Instruction>) -> definition::Val {
         match expr {
-            nodes::Expression::IntegerLiteral(i) => {
+            nodes::ExpressionEnum::IntegerLiteral(i) => {
                 definition::Val::Const(*i)
             }
-            nodes::Expression::Unop(op, ref expr) => {
-                let src = self.emit_expression(expr, body);
+            nodes::ExpressionEnum::Unop(op, ref expr) => {
+                let src = self.emit_expression(&expr.expr, body);
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone());
                 let tacky_op = match op {
@@ -247,7 +248,7 @@ impl Tacky {
                 body.push(definition::Instruction::Unary(tacky_op, src, dest.clone()));
                 dest
             }
-            nodes::Expression::Binop(op, ref lft, ref rht) => {
+            nodes::ExpressionEnum::Binop(op, ref lft, ref rht) => {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone());
                 let tacky_op = self.convert_binop(op);
@@ -257,16 +258,16 @@ impl Tacky {
                     let short_circuit_label = self.make_temporary();
                     let short_circuit_end_label = self.make_temporary();
 
-                    let lhs = self.emit_expression(lft, body);
+                    let lhs = self.emit_expression(&lft.expr, body);
 
                     let sh_circ_val = if !sh_circ.1 {
                         body.push(definition::Instruction::JumpIfZero(lhs.clone(), short_circuit_label.clone()));
-                        let rhs = self.emit_expression(rht, body);
+                        let rhs = self.emit_expression(&rht.expr, body);
                         body.push(definition::Instruction::JumpIfZero(rhs.clone(), short_circuit_label.clone()));
                         true
                     } else {
                         body.push(definition::Instruction::JumpIfNotZero(lhs.clone(), short_circuit_label.clone()));
-                        let rhs = self.emit_expression(rht, body);
+                        let rhs = self.emit_expression(&rht.expr, body);
                         body.push(definition::Instruction::JumpIfNotZero(rhs.clone(), short_circuit_label.clone()));
                         false
                     };
@@ -280,46 +281,46 @@ impl Tacky {
                     return dest;
                 }
 
-                let lhs = self.emit_expression(lft, body);
-                let rhs = self.emit_expression(rht, body);
+                let lhs = self.emit_expression(&lft.expr, body);
+                let rhs = self.emit_expression(&rht.expr, body);
 
                 body.push(definition::Instruction::Binary(tacky_op, lhs, rhs, dest.clone()));
                 dest
             }
-            nodes::Expression::Var(ref s) => {
+            nodes::ExpressionEnum::Var(ref s) => {
                 definition::Val::Var(s.name.clone())
             }
-            nodes::Expression::Assign(ref lhs, ref rhs) => {
-                let lhs = match **lhs {
-                    nodes::Expression::Var(ref s) => {
+            nodes::ExpressionEnum::Assign(ref lhs, ref rhs) => {
+                let lhs = match lhs.expr {
+                    nodes::ExpressionEnum::Var(ref s) => {
                         s.name.clone()
                     }
                     _ => panic!("Invalid assignment target"),
                 };
 
-                let rhs = self.emit_expression(rhs, body);
+                let rhs = self.emit_expression(&rhs.expr, body);
                 body.push(definition::Instruction::Copy(definition::Val::Var(lhs.clone()), rhs.clone()));
                 definition::Val::Var(lhs)
             }
-            nodes::Expression::Conditional(ref cond, ref lft, ref rht) => {
+            nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone());
                 let e2_label = self.make_temporary();
                 let end_label = self.make_temporary();
-                let cond = self.emit_expression(cond, body);
+                let cond = self.emit_expression(&cond.expr, body);
                 body.push(definition::Instruction::JumpIfZero(cond, e2_label.clone()));
-                let v1 = self.emit_expression(lft, body);
+                let v1 = self.emit_expression(&lft.expr, body);
                 body.push(definition::Instruction::Copy(dest.clone(), v1));
                 body.push(definition::Instruction::Jump(end_label.clone()));
                 body.push(definition::Instruction::Label(e2_label));
-                let v2 = self.emit_expression(rht, body);
+                let v2 = self.emit_expression(&rht.expr, body);
                 body.push(definition::Instruction::Copy(dest.clone(), v2));
                 body.push(definition::Instruction::Label(end_label));
                 dest
             }
-            nodes::Expression::Increment(ref expr) => {
-                let expr = match **expr {
-                    nodes::Expression::Var(ref s) => {
+            nodes::ExpressionEnum::Increment(ref expr) => {
+                let expr = match expr.expr {
+                    nodes::ExpressionEnum::Var(ref s) => {
                         s.name.clone()
                     }
                     _ => panic!("Invalid increment target"),
@@ -329,9 +330,9 @@ impl Tacky {
                 body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), src.clone()));
                 src
             }
-            nodes::Expression::Decrement(ref expr) => {
-                let expr = match **expr {
-                    nodes::Expression::Var(ref s) => {
+            nodes::ExpressionEnum::Decrement(ref expr) => {
+                let expr = match expr.expr {
+                    nodes::ExpressionEnum::Var(ref s) => {
                         s.name.clone()
                     }
                     _ => panic!("Invalid increment target"),
@@ -341,10 +342,10 @@ impl Tacky {
                 body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), src.clone()));
                 src
             }
-            nodes::Expression::FunctionCall(ref ident, ref args) => {
+            nodes::ExpressionEnum::FunctionCall(ref ident, ref args) => {
                 let mut arg_vals = Vec::new();
                 for arg in args {
-                    arg_vals.push(self.emit_expression(arg, body));
+                    arg_vals.push(self.emit_expression(&arg.expr, body));
                 }
 
                 let dest_name = self.make_temporary();

@@ -133,6 +133,7 @@ impl VariableResolution {
             params: new_params,
             body: new_body,
             storage_class: decl.storage_class.clone(),
+            ty: decl.ty.clone(),
         }
     }
 
@@ -194,6 +195,7 @@ impl VariableResolution {
                                 name: nodes::Identifier { name: unique_name },
                                 expr: Some(val),
                                 storage_class: decl.storage_class,
+                                ty: decl.ty.clone(),
                             }))
                         } else {
                             nodes::BlockItem::Statement(nodes::Statement::Empty)
@@ -258,6 +260,7 @@ impl VariableResolution {
                                 None => None,
                             },
                             storage_class: decl.storage_class.clone(),
+                            ty: decl.ty.clone(),
                         };
                         let var = decl.name.clone();
                         variable_map.insert(var.clone(), VarData {
@@ -294,35 +297,35 @@ impl VariableResolution {
     }
 
     fn is_valid_lvalue(&self, expr: &nodes::Expression) -> bool {
-        match expr {
-            nodes::Expression::Var(_) => true,
+        match expr.expr {
+            nodes::ExpressionEnum::Var(_) => true,
             _ => false,
         }
     }
 
     fn resolve_expression(&mut self, expr: &nodes::Expression, variable_map: &VariableMap) -> nodes::Expression {
-        match expr {
-            nodes::Expression::Binop(ref op, ref src1, ref src2) => {
+        nodes::Expression::new(match expr.expr.clone() {
+            nodes::ExpressionEnum::Binop(ref op, ref src1, ref src2) => {
                 let src1 = self.resolve_expression(src1, variable_map);
                 let src2 = self.resolve_expression(src2, variable_map);
 
-                nodes::Expression::Binop(op.clone(), Box::new(src1), Box::new(src2))
+                nodes::ExpressionEnum::Binop(op.clone(), Box::new(src1), Box::new(src2))
             },
-            nodes::Expression::Unop(ref op, ref src) => {
+            nodes::ExpressionEnum::Unop(ref op, ref src) => {
                 let src = self.resolve_expression(src, variable_map);
 
-                nodes::Expression::Unop(op.clone(), Box::new(src))
+                nodes::ExpressionEnum::Unop(op.clone(), Box::new(src))
             },
-            nodes::Expression::IntegerLiteral(_) => expr.clone(),
-            nodes::Expression::Var(ref ident) => {
+            nodes::ExpressionEnum::IntegerLiteral(_) => expr.expr.clone(),
+            nodes::ExpressionEnum::Var(ref ident) => {
                 if variable_map.contains_key(ident) {
                     let ident = ident.name.clone();
-                    nodes::Expression::Var(nodes::Identifier { name: variable_map.get(&nodes::Identifier { name: ident }).unwrap().name.clone() })
+                    nodes::ExpressionEnum::Var(nodes::Identifier { name: variable_map.get(&nodes::Identifier { name: ident }).unwrap().name.clone() })
                 } else {
                     panic!("Variable {:?} not found", ident);
                 }
             },
-            nodes::Expression::Assign(ref lhs, ref rhs) => {
+            nodes::ExpressionEnum::Assign(ref lhs, ref rhs) => {
                 if !self.is_valid_lvalue(&**lhs) {
                     panic!("Invalid lvalue");
                 }
@@ -330,43 +333,43 @@ impl VariableResolution {
                 let lhs = self.resolve_expression(lhs, variable_map);
                 let rhs = self.resolve_expression(rhs, variable_map);
 
-                nodes::Expression::Assign(Box::new(lhs), Box::new(rhs))
+                nodes::ExpressionEnum::Assign(Box::new(lhs), Box::new(rhs))
             },
-            nodes::Expression::Conditional(ref cond, ref lft, ref rht) => {
+            nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
                 let cond = Box::new(self.resolve_expression(&**cond, variable_map));
                 let lft = Box::new(self.resolve_expression(&**lft, variable_map));
                 let rht = Box::new(self.resolve_expression(&**rht, variable_map));
 
-                nodes::Expression::Conditional(cond, lft, rht)
+                nodes::ExpressionEnum::Conditional(cond, lft, rht)
             },
-            nodes::Expression::Increment(ref expr) => {
+            nodes::ExpressionEnum::Increment(ref expr) => {
                 if !self.is_valid_lvalue(&**expr) {
                     panic!("Invalid lvalue");
                 }
 
                 let expr = self.resolve_expression(expr, variable_map);
 
-                nodes::Expression::Increment(Box::new(expr))
+                nodes::ExpressionEnum::Increment(Box::new(expr))
             },
-            nodes::Expression::Decrement(ref expr) => {
+            nodes::ExpressionEnum::Decrement(ref expr) => {
                 if !self.is_valid_lvalue(&**expr) {
                     panic!("Invalid lvalue");
                 }
 
                 let expr = self.resolve_expression(expr, variable_map);
 
-                nodes::Expression::Decrement(Box::new(expr))
+                nodes::ExpressionEnum::Decrement(Box::new(expr))
             },
-            nodes::Expression::FunctionCall(name, args) => {
+            nodes::ExpressionEnum::FunctionCall(name, args) => {
                 let ident = nodes::Identifier { name: name.clone() };
                 if variable_map.contains_key(&ident) {
                     let name = variable_map.get(&ident).unwrap();
                     let args = args.iter().map(|arg| self.resolve_expression(arg, variable_map)).collect();
-                    nodes::Expression::FunctionCall(name.name.clone(), args)
+                    nodes::ExpressionEnum::FunctionCall(name.name.clone(), args)
                 } else {
                     panic!("Function {:?} not found", name);
                 }
             }
-        }
+        })
     }
 }

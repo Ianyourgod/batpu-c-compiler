@@ -58,6 +58,7 @@ hlt
                 },
                 #[allow(unused_variables)]
                 assembly::TopLevel::StaticVariable(ref name, global, init) => {
+                    // TODO: maybe have it literally malloc the memory since we don't have a von neumann architecture?
                     todo!()
                 }
             }
