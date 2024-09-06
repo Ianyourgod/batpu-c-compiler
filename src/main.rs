@@ -63,20 +63,24 @@ fn _test_lexer(input: String) {
     }
 }
 
-fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String) {
+fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String, do_not_link: bool) {
     // create dir called "tmpcb" to store files
-    std::fs::create_dir_all("tmpcb").expect("Failed to create directory");
+    std::fs::create_dir_all(".tmpcb").expect("Failed to create directory");
 
     let mut binding = std::process::Command::new("./bsm");
     let cmd = binding
         .arg("-o")
         .arg(output_name);
 
+    if do_not_link {
+        cmd.arg("-c");
+    }
+
     for input in inputs.iter().enumerate() {
         // write to file
-        std::fs::write(format!("tmpcb/input{}.as", input.0), input.1).expect("Failed to write to file");
+        std::fs::write(format!(".tmpcb/input{}.as", input.0), input.1).expect("Failed to write to file");
 
-        cmd.arg(format!("tmpcb/input{}.as", input.0));
+        cmd.arg(format!(".tmpcb/input{}.as", input.0));
     }
 
     for object_file in object_files.iter().enumerate() {
@@ -97,7 +101,9 @@ fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String)
     }
 
     // remove dir
-    //std::fs::remove_dir_all("tmpcb").expect("Failed to remove directory");
+    if !do_not_link {
+        std::fs::remove_dir_all(".tmpcb").expect("Failed to remove directory");
+    }
 }
 
 fn compile(input: String) -> String {
@@ -127,7 +133,5 @@ fn main() {
         outputs.push(output);
     }
 
-    if !args.do_not_link {
-        assemble(outputs, args.link_files, args.output_name);
-    }
+    assemble(outputs, args.link_files, args.output_name, args.do_not_link);
 }
