@@ -8,6 +8,13 @@ pub struct Parser {
     current_token: TokenType,
 }
 
+#[derive(Debug)]
+enum Declarator {
+    Identifier(String),
+    Pointer(Box<Declarator>),
+    Function(Vec<(nodes::Type, Declarator)>, String),
+}
+
 impl Parser {
     pub fn new(mut lexer: Lexer) -> Parser {
         let current_token = lexer.next_token();
@@ -93,6 +100,86 @@ impl Parser {
         }
     }
 
+    fn parse_declarator(&mut self, ident: Option<String>) -> Declarator {
+        match self.current_token {
+            TokenType::Star => {
+                self.next_token();
+                Declarator::Pointer(Box::new(self.parse_declarator(None)))
+            },
+            TokenType::Identifier(ref name) => {
+                let name = name.clone();
+                self.next_token();
+                if self.current_token == TokenType::LParen {
+                    let decl = self.parse_declarator(Some(name.clone()));
+                    return decl;
+                }
+                Declarator::Identifier(name)
+            },
+            TokenType::LParen => {
+                if ident.is_none() {
+                    self.next_token();
+                    let decl = self.parse_declarator(None);
+                    self.consume(TokenType::RParen);
+                    return decl;
+                }
+
+                self.next_token();
+                let mut params: Vec<(nodes::Type, Declarator)> = Vec::new();
+                while self.current_token != TokenType::RParen {
+                    let mut types: Vec<TokenType> = Vec::new();
+                    while self.is_valid_var_starter(&self.current_token) {
+                        types.push(self.current_token.clone());
+                        self.next_token();
+                    }
+
+                    let (type_, _) = self.parse_type_and_storage_class(types);
+
+                    let decl = self.parse_declarator(None);
+                    let (name, ty, _) = self.process_declarator(decl, type_);
+
+                    params.push((ty, Declarator::Identifier(name)));
+
+                    if self.current_token == TokenType::Comma {
+                        self.next_token();
+                    } else if self.current_token != TokenType::RParen {
+                        panic!("Expected ',' or ')', got {:?}", self.current_token);
+                    }
+                }
+                self.next_token();
+                Declarator::Function(params, ident.unwrap())
+            },
+            _ => {
+                if ident.is_some() {
+                    return Declarator::Identifier(ident.unwrap());
+                } else {
+                    panic!("Expected identifier, got {:?}", self.current_token);
+                }
+            }
+        }
+    }
+
+    fn process_declarator(&mut self, declarator: Declarator, base_type: nodes::Type) -> (String, nodes::Type, Vec<String>) {
+        match declarator {
+            Declarator::Identifier(name) => (name, base_type, Vec::new()),
+            Declarator::Pointer(inner) => {
+                let (name, ty, ptrs) = self.process_declarator(*inner, base_type);
+                (name, nodes::Type::Pointer(Box::new(ty)), ptrs)
+            },
+            Declarator::Function(params, name) => {
+                let mut param_types: Vec<nodes::Type> = Vec::new();
+                let mut param_names: Vec<String> = Vec::new();
+
+                for (ty, decl) in params {
+                    let (name, ty, _) = self.process_declarator(decl, ty);
+                    param_types.push(ty);
+                    param_names.push(name);
+                }
+
+                (name, nodes::Type::Fn(param_types, Box::new(base_type)), param_names)
+            },
+        }
+    }
+
     fn parse_declaration(&mut self) -> nodes::Declaration {
         let mut types: Vec<TokenType> = Vec::new();
         while self.is_valid_var_starter(&self.current_token.clone()) {
@@ -103,96 +190,65 @@ impl Parser {
         #[allow(unused_variables)]
         let (type_, class_specifier) = self.parse_type_and_storage_class(types);
 
-        let name = match self.current_token {
-            TokenType::Identifier(ref s) => s.clone(),
-            _ => panic!("Expected identifier, got {:?}", self.current_token),
-        };
-        self.next_token();
+        let declarator = self.parse_declarator(None);
 
-        if self.current_token == TokenType::LParen {
-            let mut args: Vec<nodes::Identifier> = Vec::new();
+        let (name, type_, args) = self.process_declarator(declarator, type_);
 
-            let mut param_types: Vec<nodes::Type> = Vec::new();
-
-            self.next_token();
-            while self.current_token != TokenType::RParen {
-                // parse type, then name, then comma
-                if !self.is_valid_var_starter(&self.current_token) {
-                    panic!("Expected type, got {:?}", self.current_token);
+        match type_ {
+            nodes::Type::Fn(_, _) => {
+                if self.current_token == TokenType::Semicolon {
+                    return nodes::Declaration::FuncDecl(nodes::FuncDecl {
+                        name,
+                        params: args,
+                        body: Vec::new(),
+                        storage_class: class_specifier,
+                        ty: type_,
+                    })
                 }
-
-                let mut types: Vec<TokenType> = Vec::new();
-                while self.is_valid_var_starter(&self.current_token) {
-                    types.push(self.current_token.clone());
-                    self.next_token();
+        
+                self.consume(TokenType::LBrace);
+        
+                let mut body: Vec<nodes::BlockItem> = Vec::new();
+        
+                while self.current_token != TokenType::RBrace {
+                    let stmt = self.parse_block_item();
+                    body.push(stmt);
                 }
-
-                let (type_, _) = self.parse_type_and_storage_class(types);
-
-                let name = match self.current_token {
-                    TokenType::Identifier(ref s) => s.clone(),
-                    _ => panic!("Expected identifier, got {:?}", self.current_token),
-                };
-
-                args.push(nodes::Identifier { name });
-                param_types.push(type_);
-            }
-    
-            self.next_token();
-
-            let ty = nodes::Type::Fn(param_types, Box::new(type_));
-
-            if self.current_token == TokenType::Semicolon {
+        
                 return nodes::Declaration::FuncDecl(nodes::FuncDecl {
                     name,
                     params: args,
-                    body: Vec::new(),
+                    body,
                     storage_class: class_specifier,
-                    ty,
-                })
+                    ty: type_,
+                });
             }
-    
-            self.consume(TokenType::LBrace);
-    
-            let mut body: Vec<nodes::BlockItem> = Vec::new();
-    
-            while self.current_token != TokenType::RBrace {
-                let stmt = self.parse_block_item();
-                body.push(stmt);
-            }
-    
-            nodes::Declaration::FuncDecl(nodes::FuncDecl {
+            _ => (),
+        }
+        
+        if self.current_token == TokenType::Semicolon {
+            self.next_token();
+            nodes::Declaration::VarDecl(nodes::VarDecl {
                 name,
-                params: args,
-                body,
+                expr: None,
                 storage_class: class_specifier,
-                ty,
+                ty: type_,
+            })
+        } else if self.current_token == TokenType::Equals {
+            self.next_token();
+            let expr = self.parse_expression(0);
+            if self.current_token != TokenType::Semicolon {
+                panic!("Expected semicolon, got {:?}", self.current_token);
+            }
+            self.next_token();
+            nodes::Declaration::VarDecl(nodes::VarDecl {
+                name,
+                expr: Some(expr),
+                storage_class: class_specifier,
+                ty: type_,
             })
         } else {
-            if self.current_token == TokenType::Semicolon {
-                self.next_token();
-                nodes::Declaration::VarDecl(nodes::VarDecl {
-                    name: nodes::Identifier { name },
-                    expr: None,
-                    storage_class: class_specifier,
-                    ty: type_,
-                })
-            } else if self.current_token == TokenType::Equals {
-                self.next_token();
-                let expr = self.parse_expression(0);
-                if self.current_token != TokenType::Semicolon {
-                    panic!("Expected semicolon, got {:?}", self.current_token);
-                }
-                self.next_token();
-                nodes::Declaration::VarDecl(nodes::VarDecl {
-                    name: nodes::Identifier { name },
-                    expr: Some(expr),
-                    storage_class: class_specifier,
-                    ty: type_,
-                })
-            } else {
-                panic!("Unexpected token: {:?}", self.current_token);
-            }
+            panic!("Unexpected token: {:?}", self.current_token);
         }
     }
 
@@ -248,16 +304,6 @@ impl Parser {
                 self.consume(TokenType::Semicolon);
                 expr
             },
-        }
-    }
-
-    fn parse_lvalue(&mut self) -> nodes::Identifier {
-        match self.current_token.clone() {
-            TokenType::Identifier(s) => {
-                self.next_token();
-                nodes::Identifier { name: s }
-            },
-            _ => panic!("Expected lvalue, got {:?}", self.current_token),
         }
     }
 
@@ -383,6 +429,16 @@ impl Parser {
                 let expr = self.parse_factor();
                 nodes::ExpressionEnum::Unop(nodes::Unop::LogicalNot, Box::new(expr))
             }
+            TokenType::Star => {
+                self.next_token();
+                let expr = self.parse_factor();
+                nodes::ExpressionEnum::Dereference(Box::new(expr))
+            }
+            TokenType::Ampersand => {
+                self.next_token();
+                let expr = self.parse_factor();
+                nodes::ExpressionEnum::AddressOf(Box::new(expr))
+            }
             _ => panic!("Unknown token: {:?}", self.current_token),
         })
     }
@@ -498,11 +554,12 @@ impl Parser {
                     self.next_token();
                     nodes::Expression::new(nodes::ExpressionEnum::FunctionCall(ident, args))
                 } else {
-                    nodes::Expression::new(nodes::ExpressionEnum::Var(nodes::Identifier { name: ident }))
+                    nodes::Expression::new(nodes::ExpressionEnum::Var(ident))
                 }
             }
             TokenType::Tilde | TokenType::Minus |
-            TokenType::LogicalNot => self.parse_unop(),
+            TokenType::LogicalNot |
+            TokenType::Star | TokenType::Ampersand => self.parse_unop(),
             TokenType::LParen => {
                 self.next_token();
                 let expr = self.parse_expression(0);

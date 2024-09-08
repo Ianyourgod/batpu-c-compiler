@@ -16,7 +16,7 @@ struct VarData {
 }
 
 struct VariableMap {
-    pub map: HashMap<nodes::Identifier, VarData>
+    pub map: HashMap<String, VarData>
 }
 
 impl VariableMap {
@@ -27,7 +27,7 @@ impl VariableMap {
     }
 
     pub fn clone(&mut self) -> VariableMap {
-        let mut new_map: HashMap<nodes::Identifier, VarData> = HashMap::new();
+        let mut new_map: HashMap<String, VarData> = HashMap::new();
         
         for (key, value) in self.map.iter() {
             new_map.insert(key.clone(), VarData {
@@ -41,15 +41,15 @@ impl VariableMap {
         VariableMap { map: new_map }
     }
 
-    pub fn insert(&mut self, k: nodes::Identifier, v: VarData) {
+    pub fn insert(&mut self, k: String, v: VarData) {
         self.map.insert(k, v);
     }
 
-    pub fn contains_key(&self, k: &nodes::Identifier) -> bool {
+    pub fn contains_key(&self, k: &String) -> bool {
         self.map.contains_key(k)
     }
 
-    pub fn get(&self, k: &nodes::Identifier) -> Option<&VarData> {
+    pub fn get(&self, k: &String) -> Option<&VarData> {
         self.map.get(k)
     }
 }
@@ -88,7 +88,7 @@ impl VariableResolution {
     }
 
     fn resolve_function_declaration(&mut self, decl: &nodes::FuncDecl, variable_map: &mut VariableMap) -> nodes::FuncDecl {
-        let decl_name = nodes::Identifier { name: decl.name.clone() };
+        let decl_name = &decl.name;
         if variable_map.contains_key(&decl_name) {
             let old_decl = variable_map.get(&decl_name).unwrap();
             if old_decl.from_current_scope && !old_decl.has_external_linkage {
@@ -96,7 +96,7 @@ impl VariableResolution {
             }
         }
 
-        variable_map.insert(decl_name, VarData {
+        variable_map.insert(decl_name.clone(), VarData {
             name: decl.name.clone(),
             has_expr: decl.body.len() > 0,
             has_external_linkage: true,
@@ -104,21 +104,21 @@ impl VariableResolution {
         });
 
         let mut inner_map = variable_map.clone();
-        let mut new_params: Vec<nodes::Identifier> = Vec::with_capacity(decl.params.len());
+        let mut new_params: Vec<String> = Vec::with_capacity(decl.params.len());
 
-        for param in decl.params.clone() {
-            if variable_map.contains_key(&param) {
+        for param in &decl.params {
+            if variable_map.contains_key(param) {
                 panic!("Variable {:?} already declared", param);
             }
             
-            let unique_name = self.generate_unique_name("arg", param.name.clone());
+            let unique_name = self.generate_unique_name("arg", param);
             inner_map.insert(param.clone(), VarData {
                 name: unique_name.clone(),
                 has_expr: false,
                 has_external_linkage: false,
                 from_current_scope: true,
             });
-            new_params.push(nodes::Identifier { name: unique_name });
+            new_params.push(unique_name);
         }
 
         let mut new_body: Vec<nodes::BlockItem> = Vec::new();
@@ -137,7 +137,7 @@ impl VariableResolution {
         }
     }
 
-    fn generate_unique_name(&mut self, function: &str, original_name: String) -> String {
+    fn generate_unique_name(&mut self, function: &str, original_name: &String) -> String {
         let name = format!("local{}.{}.{}", function, original_name, self.unique_counter);
         self.unique_counter += 1;
         name
@@ -145,7 +145,7 @@ impl VariableResolution {
 
     fn resolve_file_scope_declaration(&mut self, decl: &nodes::VarDecl, variable_map: &mut VariableMap) -> nodes::Declaration {
         variable_map.insert(decl.name.clone(), VarData {
-            name: decl.name.name.clone(),
+            name: decl.name.clone(),
             has_expr: decl.expr.is_some(),
             from_current_scope: true,
             has_external_linkage: true,
@@ -169,7 +169,7 @@ impl VariableResolution {
 
                         if decl.storage_class == nodes::StorageClass::Extern {
                             variable_map.insert(decl.name.clone(), VarData {
-                                name: decl.name.name.clone(),
+                                name: decl.name.clone(),
                                 has_expr: decl.expr.is_some(),
                                 from_current_scope: true,
                                 has_external_linkage: true,
@@ -179,7 +179,7 @@ impl VariableResolution {
         
                         let orig_name = decl.name.clone();
         
-                        let unique_name = self.generate_unique_name("var", orig_name.name);
+                        let unique_name = self.generate_unique_name("var", &orig_name);
 
                         variable_map.insert(decl.name.clone(), VarData {
                             name: unique_name.clone(),
@@ -192,7 +192,7 @@ impl VariableResolution {
                             let expr = decl.expr.as_ref().unwrap();
                             let val = self.resolve_expression(expr, variable_map);
                             nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
-                                name: nodes::Identifier { name: unique_name },
+                                name: unique_name,
                                 expr: Some(val),
                                 storage_class: decl.storage_class,
                                 ty: decl.ty.clone(),
@@ -262,9 +262,9 @@ impl VariableResolution {
                             storage_class: decl.storage_class.clone(),
                             ty: decl.ty.clone(),
                         };
-                        let var = decl.name.clone();
+                        let var = &decl.name;
                         variable_map.insert(var.clone(), VarData {
-                            name: var.name,
+                            name: var.clone(),
                             has_expr: decl.expr.is_some(),
                             has_external_linkage: decl.storage_class == nodes::StorageClass::Extern,
                             from_current_scope: true,
@@ -299,6 +299,7 @@ impl VariableResolution {
     fn is_valid_lvalue(&self, expr: &nodes::Expression) -> bool {
         match expr.expr {
             nodes::ExpressionEnum::Var(_) => true,
+            nodes::ExpressionEnum::Dereference(_) => true,
             _ => false,
         }
     }
@@ -319,8 +320,7 @@ impl VariableResolution {
             nodes::ExpressionEnum::IntegerLiteral(_) => expr.expr.clone(),
             nodes::ExpressionEnum::Var(ref ident) => {
                 if variable_map.contains_key(ident) {
-                    let ident = ident.name.clone();
-                    nodes::ExpressionEnum::Var(nodes::Identifier { name: variable_map.get(&nodes::Identifier { name: ident }).unwrap().name.clone() })
+                    nodes::ExpressionEnum::Var(variable_map.get(ident).unwrap().name.clone())
                 } else {
                     panic!("Variable {:?} not found", ident);
                 }
@@ -361,7 +361,7 @@ impl VariableResolution {
                 nodes::ExpressionEnum::Decrement(Box::new(expr))
             },
             nodes::ExpressionEnum::FunctionCall(name, args) => {
-                let ident = nodes::Identifier { name: name.clone() };
+                let ident = &name;
                 if variable_map.contains_key(&ident) {
                     let name = variable_map.get(&ident).unwrap();
                     let args = args.iter().map(|arg| self.resolve_expression(arg, variable_map)).collect();
@@ -369,7 +369,17 @@ impl VariableResolution {
                 } else {
                     panic!("Function {:?} not found", name);
                 }
-            }
+            },
+            nodes::ExpressionEnum::Dereference(ref expr) => {
+                let expr = self.resolve_expression(expr, variable_map);
+
+                nodes::ExpressionEnum::Dereference(Box::new(expr))
+            },
+            nodes::ExpressionEnum::AddressOf(ref expr) => {
+                let expr = self.resolve_expression(expr, variable_map);
+
+                nodes::ExpressionEnum::AddressOf(Box::new(expr))
+            },
         })
     }
 }

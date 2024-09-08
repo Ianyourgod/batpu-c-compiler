@@ -31,6 +31,7 @@ pub enum TokenType {
     Tilde,
     QuestionMark,
     Colon,
+    Ampersand,
     // Assignment operators
     Equals,
     AddAssign,
@@ -125,7 +126,7 @@ impl Lexer {
                 ('=', TokenType::NotEqual)
             ),
             '&' => after_char!(self, self.peek_char(),
-                TokenType::Illegal,
+                TokenType::Ampersand,
                 ('&', TokenType::LogicalAnd)
             ),
             '|' => after_char!(self, self.peek_char(),

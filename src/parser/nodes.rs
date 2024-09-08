@@ -8,7 +8,7 @@ pub struct Program {
 #[derive(Debug, Clone)]
 pub struct FuncDecl {
     pub name: String,
-    pub params: Vec<Identifier>,
+    pub params: Vec<String>,
     pub body: Vec<BlockItem>,
     pub storage_class: StorageClass,
     pub ty: Type,
@@ -43,15 +43,10 @@ pub enum Declaration {
 
 #[derive(Debug, Clone)]
 pub struct VarDecl {
-    pub name: Identifier,
+    pub name: String,
     pub expr: Option<Expression>,
     pub storage_class: StorageClass,
     pub ty: Type,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Identifier {
-    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -80,12 +75,14 @@ pub enum ExpressionEnum {
     IntegerLiteral(i8),
     Unop(Unop, Box<Expression>),
     Binop(Binop, Box<Expression>, Box<Expression>),
-    Var(Identifier),
+    Var(String),
     Assign(Box<Expression>, Box<Expression>), // lvalues :scream:
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
     Increment(Box<Expression>),
     Decrement(Box<Expression>),
     FunctionCall(String, Vec<Expression>),
+    Dereference(Box<Expression>),
+    AddressOf(Box<Expression>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -111,7 +108,7 @@ pub enum Binop {
 
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
-    symbols: HashMap<Identifier, (Type, TableEntry)>,
+    symbols: HashMap<String, (Type, TableEntry)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -135,15 +132,15 @@ impl SymbolTable {
         }
     }
 
-    pub fn insert(&mut self, id: Identifier, ty: (Type, TableEntry)) {
+    pub fn insert(&mut self, id: String, ty: (Type, TableEntry)) {
         self.symbols.insert(id, ty);
     }
 
-    pub fn lookup(&self, id: &Identifier) -> Option<&(Type, TableEntry)> {
+    pub fn lookup(&self, id: &String) -> Option<&(Type, TableEntry)> {
         self.symbols.get(id)
     }
 
-    pub fn contains(&self, id: &Identifier) -> bool {
+    pub fn contains(&self, id: &String) -> bool {
         self.symbols.contains_key(id)
     }
 }
@@ -152,6 +149,7 @@ impl SymbolTable {
 pub enum Type {
     Int,
     Fn(Vec<Type>, Box<Type>),
+    Pointer(Box<Type>),
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

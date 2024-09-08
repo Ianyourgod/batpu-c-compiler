@@ -29,13 +29,17 @@ pub enum Instruction {
     JumpIfZero(Val, String),
     JumpIfNotZero(Val, String),
     Label(String),
-    FunCall(String, Vec<Val>, Val),
+    FunCall(String, Vec<Val>, Val, bool), // bool is for if global
+    GetAddress(Val, Val),
+    Load(Val, Val),
+    Store(Val, Val),
 }
 
 #[derive(Debug, Clone)]
 pub enum Val {
     Const(i8),
     Var(String),
+    DereferencedPtr(Box<Val>),
 }
 
 #[derive(Debug, Clone)]

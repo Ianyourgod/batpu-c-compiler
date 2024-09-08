@@ -35,14 +35,17 @@ pub enum Instruction {
     Cmp(Operand, Operand),
     AllocateStack(u8),
     //DeallocateStack(u8),
-    Lod(Register, i16, Register),
-    Str(Register, i16, Register),
+    Lod(Register, i16, Operand),
+    Str(Register, i16, Operand),
     Jmp(String),
     JmpCC(CondCode, String),
     Label(String),
     //Push(Operand),
-    Call(String),
+    Call(String, bool),
     Return,
+
+    // "fake" instruction
+    Lea(Operand, Operand),
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +59,7 @@ pub enum Operand {
     Immediate(i8),
     Register(Register),
     Pseudo(String),
-    Stack(i16),
+    Memory(Register, i16),
     Data(String),
 }
 

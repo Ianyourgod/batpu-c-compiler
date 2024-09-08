@@ -73,11 +73,11 @@ impl InstructionFixupPass {
                     val.clone()
                 ));
             },
-            assembly::Operand::Stack(offset) => {
+            assembly::Operand::Memory(base_reg, offset) => {
                 instructions.push(assembly::Instruction::Lod(
-                    assembly::Register::new("rbp".to_string()),
+                    base_reg.clone(),
                     *offset,
-                    reg.clone()
+                    assembly::Operand::Register(reg.clone())
                 ));
             },
             assembly::Operand::Data(name) => {
@@ -85,16 +85,16 @@ impl InstructionFixupPass {
                 instructions.push(assembly::Instruction::Lod(
                     assembly::Register::new("r0".to_string()),
                     *static_offset as i16,
-                    reg.clone()
+                    assembly::Operand::Register(reg.clone())
                 ));
             }
         }
     }
 
-    fn is_stack(&self, op: &assembly::Operand) -> (bool, i16) {
+    fn is_mem(&self, op: &assembly::Operand) -> (bool, assembly::Register, i16) {
         match op {
-            assembly::Operand::Stack(offset) => (true, *offset),
-            _ => (false, 0),
+            assembly::Operand::Memory(reg, offset) => (true, reg.clone(), *offset),
+            _ => (false, assembly::Register::new("r0".to_string()), 0),
         }
     }
 
@@ -121,13 +121,13 @@ impl InstructionFixupPass {
                         return;
                     }
 
-                    let (is_stack, offset) = self.is_stack(dst);
+                    let (is_mem, reg, offset) = self.is_mem(dst);
 
-                    if is_stack {
+                    if is_mem {
                         instructions.push(assembly::Instruction::Str(
-                            assembly::Register::new("rbp".to_string()),
+                            reg,
                             offset,
-                            dst_reg,
+                            assembly::Operand::Register(dst_reg),
                         ));
                     } else {
                         panic!("Invalid destination operand: {:?}", dst);
@@ -156,13 +156,13 @@ impl InstructionFixupPass {
                         return;
                     }
 
-                    let (is_stack, offset) = self.is_stack(dst);
+                    let (is_mem, reg, offset) = self.is_mem(dst);
 
-                    if is_stack {
+                    if is_mem {
                         instructions.push(assembly::Instruction::Str(
-                            assembly::Register::new("rbp".to_string()),
+                            reg,
                             offset,
-                            dst_reg,
+                            assembly::Operand::Register(dst_reg),
                         ));
                     } else {
                         panic!("Invalid destination operand: {:?}", dst);
@@ -195,13 +195,13 @@ impl InstructionFixupPass {
                         return;
                     }
 
-                    let (is_stack, offset) = self.is_stack(dst);
+                    let (is_mem, reg, offset) = self.is_mem(dst);
 
-                    if is_stack {
+                    if is_mem {
                         instructions.push(assembly::Instruction::Str(
-                            assembly::Register::new("rbp".to_string()),
+                            reg,
                             offset,
-                            dst_reg,
+                            assembly::Operand::Register(dst_reg),
                         ));
                     } else {
                         panic!("Invalid destination operand: {:?}", dst);
@@ -229,32 +229,126 @@ impl InstructionFixupPass {
                 ));
             }
             assembly::Instruction::Adi(ref op, i) => {
-                let (is_stack, offset) = self.is_stack(op);
+                let (is_mem, base_reg, offset) = self.is_mem(op);
 
-                if !is_stack {
+                if !is_mem {
                     instructions.push(stmt.clone());
                     return;
                 }
 
-                let reg = assembly::Register::new("r10".to_string());
+                let small_reg = assembly::Register::new("r10".to_string());
 
-                self.to_register(op, &reg, instructions);
+                self.to_register(op, &small_reg, instructions);
+
+                let reg = assembly::Operand::Register(small_reg);
+
+
 
                 instructions.push(assembly::Instruction::Adi(
-                    assembly::Operand::Register(reg.clone()),
+                    reg.clone(),
                     i.clone()
                 ));
 
-                instructions.push(assembly::Instruction::Str(assembly::Register::new("rbp".to_string()), offset, reg));
+                instructions.push(assembly::Instruction::Str(base_reg, offset, reg));
             },
+            assembly::Instruction::Lod(reg, off, dst) => {
+                // if dst is not a register, we need to put it in a temporary register then store it in dst
+                let (is_dst_reg, _) = self.is_register(dst);
+                
+                if is_dst_reg {
+                    instructions.push(stmt.clone());
+                    return;
+                }
+
+                let dst_reg = assembly::Register::new("r10".to_string());
+
+                instructions.push(assembly::Instruction::Lod(reg.clone(), *off, assembly::Operand::Register(dst_reg.clone())));
+
+                let (is_mem, base_reg, offset) = self.is_mem(dst);
+
+                if is_mem {
+                    instructions.push(assembly::Instruction::Str(base_reg, offset, assembly::Operand::Register(dst_reg)));
+                } else {
+                    panic!("Invalid destination operand: {:?}", dst);
+                }
+            }
+            assembly::Instruction::Str(ref src, ref off, ref dst) => {
+                // if dst is not a register, we need to put it in a temporary register then store it in dst
+                let (is_dst_reg, _) = self.is_register(dst);
+                
+                if is_dst_reg {
+                    instructions.push(stmt.clone());
+                    return;
+                }
+
+                let dst_reg = assembly::Register::new("r10".to_string());
+                let (is_mem, _, _) = self.is_mem(dst);
+
+                if !is_mem {
+                    panic!("Invalid destination operand: {:?}", dst);
+                }
+
+                self.to_register(dst, &dst_reg, instructions);
+
+                instructions.push(assembly::Instruction::Str(src.clone(), *off, assembly::Operand::Register(dst_reg)));
+            }
+            assembly::Instruction::Lea(ref src, ref dst) => {
+                // alright, this is a "fake" instruction
+                // we need to get the address of src and store it in dst
+                // we do this by assuming src is a memory operand, then we add the offset to the base register
+                // then we store the result in dst
+                // if dst is not a register, we need to put it in a temporary register then store it in dst
+                // (also, we need to remove the offset when done)
+                let (is_dst_reg, _) = self.is_register(dst);
+
+                let src = match src {
+                    assembly::Operand::Memory(base_reg, offset) => (base_reg.clone(), *offset),
+                    _ => panic!("Invalid source operand: {:?}", src),
+                };
+
+                instructions.push(assembly::Instruction::Adi(
+                    assembly::Operand::Register(src.0.clone()),
+                    -src.1 as i8,
+                ));
+
+                if is_dst_reg {
+                    instructions.push(assembly::Instruction::Mov(
+                        assembly::Operand::Register(src.0.clone()),
+                        dst.clone(),
+                    ));
+                    instructions.push(assembly::Instruction::Adi(
+                        assembly::Operand::Register(src.0),
+                        src.1 as i8,
+                    ));
+                    return;
+                }
+
+                let dst_reg = assembly::Register::new("r10".to_string());
+                
+                instructions.push(assembly::Instruction::Mov(
+                    assembly::Operand::Register(src.0.clone()),
+                    assembly::Operand::Register(dst_reg.clone()),
+                ));
+
+                instructions.push(assembly::Instruction::Adi(
+                    assembly::Operand::Register(src.0),
+                    src.1 as i8,
+                ));
+
+                let (is_mem, base_reg, offset) = self.is_mem(dst);
+
+                if is_mem {
+                    instructions.push(assembly::Instruction::Str(base_reg, offset, assembly::Operand::Register(dst_reg)));
+                } else {
+                    panic!("Invalid destination operand: {:?}", dst);
+                }
+            }
             assembly::Instruction::Ldi(_, _) |
             assembly::Instruction::AllocateStack(_) |
-            assembly::Instruction::Lod(_, _, _) |
-            assembly::Instruction::Str(_, _, _) |
             assembly::Instruction::Jmp(_) |
             assembly::Instruction::JmpCC(_, _) |
             assembly::Instruction::Label(_) |
-            assembly::Instruction::Call(_) |
+            assembly::Instruction::Call(_, _) |
             assembly::Instruction::Return => instructions.push(stmt.clone()),
             //d_ => instructions.push(stmt.clone()),
         }

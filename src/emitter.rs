@@ -15,25 +15,26 @@ impl Emitter {
         }
     }
 
-    fn contains_main_function(&self) -> bool {
+    fn contains_main_function(&self) -> (bool, bool) {
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
                     if func.name == "main" {
-                        return true;
+                        return (true, func.global);
                     }
                 },
                 _ => {}
             }
         }
-        false
+        (false, false)
     }
 
     pub fn emit(&self) -> String {
+        let (contains_main, main_global) = self.contains_main_function();
         let mut output = format!("
 ldi r14 239
 ldi r15 239
-{}
+{}{}
 ldi r2 250
 str r2 r1 0
 hlt
@@ -43,7 +44,7 @@ hlt
 .mem_write
   str r1 r2 0
   ret
-", if self.contains_main_function() { "cal .main:global" } else { "" });
+", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" });
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
@@ -79,6 +80,13 @@ hlt
 
     fn emit_register(&self, reg: &assembly::Register) -> String {
         reg.to_string()
+    }
+
+    fn emit_as_register(&self, op: &assembly::Operand) -> String {
+        match op {
+            assembly::Operand::Register(ref reg) => self.emit_register(reg),
+            _ => panic!("Expected register, got {:?}", op),
+        }
     }
 
     fn emit_unop(&self, op: &assembly::Unop, src: &assembly::Operand, dst: &assembly::Operand) -> String {
@@ -148,7 +156,7 @@ hlt
                     // we add the difference to the offset
                     res.push_str(&format!("adi {} {}\n    ", src, diff));
                 }
-                res.push_str(&format!("lod {} {} {}", src, self.emit_register(dst), -i - diff*out_of_bounds as i16));
+                res.push_str(&format!("lod {} {} {}", src, self.emit_as_register(dst), -i - diff*out_of_bounds as i16));
                 if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
                 res
             }
@@ -162,7 +170,7 @@ hlt
                     // we add the difference to the offset
                     res.push_str(&format!("adi {} {}\n    ", src, diff));
                 }
-                res.push_str(&format!("str {} {} {}", src, self.emit_register(dst), -i - diff*out_of_bounds as i16));
+                res.push_str(&format!("str {} {} {}", src, self.emit_as_register(dst), -i - diff*out_of_bounds as i16));
                 if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
                 res
             }
@@ -180,9 +188,11 @@ hlt
             assembly::Instruction::Label(ref lbl) => {
                 format!(".{}", lbl)
             }
-            assembly::Instruction::Call(ref lbl) => {
-                format!("cal .{}:global", lbl)
+            assembly::Instruction::Call(ref lbl, global) => {
+                format!("cal .{}{}", lbl, if *global { ":global" } else { "" })
             }
+
+            assembly::Instruction::Lea(_, _) => unreachable!(),
         }
     }
 }

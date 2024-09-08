@@ -29,7 +29,6 @@ pub struct ConvertPass {
 
 impl ConvertPass {
     pub fn new(program: definition::Program) -> ConvertPass {
-        //println!("{:#?}", program);
         ConvertPass {
             program,
             tmp_counter: 0,
@@ -257,7 +256,7 @@ impl ConvertPass {
             definition::Instruction::Label(ref label) => {
                 instructions.push(assembly::Instruction::Label(label.clone()));
             },
-            definition::Instruction::FunCall(ref name, ref params, ref dst) => {
+            definition::Instruction::FunCall(ref name, ref params, ref dst, global) => {
                 let param_regs = param_registers!();
                 let mut current_reg = 0;
                 for param in params {
@@ -271,9 +270,39 @@ impl ConvertPass {
                     current_reg += 1;
                 }
 
-                instructions.push(assembly::Instruction::Call(name.clone()));
+                instructions.push(assembly::Instruction::Call(name.clone(), *global));
                 instructions.push(assembly::Instruction::Mov(
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                    self.convert_val(dst)
+                ));
+            },
+            definition::Instruction::Load(ref src, ref dst) => {
+                let src = self.convert_val(src);
+                instructions.push(assembly::Instruction::Mov(
+                    src,
+                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                ));
+                instructions.push(assembly::Instruction::Lod(
+                    assembly::Register::new("r1".to_string()),
+                    0,
+                    self.convert_val(dst),
+                ));
+            },
+            definition::Instruction::Store(ref src, ref dst) => {
+                let src = self.convert_val(src);
+                instructions.push(assembly::Instruction::Mov(
+                    src,
+                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                ));
+                instructions.push(assembly::Instruction::Str(
+                    assembly::Register::new("r1".to_string()),
+                    0,
+                    self.convert_val(dst),
+                ));
+            },
+            definition::Instruction::GetAddress(ref src, ref dst) => {
+                instructions.push(assembly::Instruction::Lea(
+                    self.convert_val(src),
                     self.convert_val(dst)
                 ));
             },
@@ -284,6 +313,7 @@ impl ConvertPass {
         match val {
             definition::Val::Const(i) => assembly::Operand::Immediate(*i),
             definition::Val::Var(ref s) => assembly::Operand::Pseudo(s.clone()),
+            definition::Val::DereferencedPtr(_) => panic!("Dereferenced pointers are not supported"),
         }
     }
 

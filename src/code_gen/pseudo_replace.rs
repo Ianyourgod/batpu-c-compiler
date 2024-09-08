@@ -101,34 +101,53 @@ impl PsuedoReplacePass {
 
                 instructions.push(assembly::Instruction::Cmp(src1, src2));
             }
+            assembly::Instruction::Lea(ref src, ref dst) => {
+                let src = self.emit_operand(src, context);
+                let dst = self.emit_operand(dst, context);
+
+                instructions.push(assembly::Instruction::Lea(src, dst));
+            },
+            assembly::Instruction::Lod(ref src, ref offset, ref dst) => {
+                let dst = self.emit_operand(dst, context);
+
+                instructions.push(assembly::Instruction::Lod(src.clone(), offset.clone(), dst));
+            },
+            assembly::Instruction::Str(ref src, ref offset, ref dst) => {
+                let dst = self.emit_operand(dst, context);
+
+                instructions.push(assembly::Instruction::Str(src.clone(), offset.clone(), dst));
+            },
             assembly::Instruction::Return |
             assembly::Instruction::AllocateStack(_) |
-            assembly::Instruction::Lod(_, _, _) |
-            assembly::Instruction::Str(_, _, _) |
             assembly::Instruction::Jmp(_) |
             assembly::Instruction::JmpCC(_, _) |
-            assembly::Instruction::Call(_) |
+            assembly::Instruction::Call(_, _) |
             assembly::Instruction::Label(_) => instructions.push(stmt.clone()),
         }
     }
 
     fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context) -> assembly::Operand {
         match operand {
-            assembly::Operand::Pseudo(ref identifier) => {
-                let ident = nodes::Identifier { name: identifier.clone() };
+            assembly::Operand::Pseudo(ref ident) => {
                 let is_static = self.type_table.contains(&ident) && matches!(self.type_table.lookup(&ident).unwrap().1, nodes::TableEntry::StaticAttr(_, _));
                 if is_static {
-                    return assembly::Operand::Data(identifier.clone());
+                    return assembly::Operand::Data(ident.clone());
                 }
 
-                if self.symbol_table.contains_key(identifier) {
-                    return assembly::Operand::Stack(*self.symbol_table.get(identifier).unwrap());
+                if self.symbol_table.contains_key(ident) {
+                    return assembly::Operand::Memory(
+                        assembly::Register { name: "r15".to_string() },
+                        *self.symbol_table.get(ident).unwrap()
+                    );
                 }
 
                 context.stack_offset += 1;
 
-                self.symbol_table.insert(identifier.clone(), context.stack_offset);
-                assembly::Operand::Stack(context.stack_offset)
+                self.symbol_table.insert(ident.clone(), context.stack_offset);
+                assembly::Operand::Memory(
+                    assembly::Register { name: "r15".to_string() },
+                    context.stack_offset
+                )
             },
             _ => operand.clone(),
         }

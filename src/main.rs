@@ -110,10 +110,13 @@ fn compile(input: String) -> String {
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
+
     #[allow(unused_variables)]
     let (program, symbol_table) = semantic_analysis::resolve(program);
+
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone());
     let program = tacky.emit();
+
     let assembly = code_gen::convert(program, symbol_table);
     let emitter = emitter::Emitter::new(assembly);
     let output = emitter.emit();

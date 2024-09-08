@@ -24,7 +24,7 @@ impl LoopLabeling {
 
             let mut body: Vec<nodes::BlockItem> = Vec::new();
             let mut current_label = "".to_string();
-            let mut params: Vec<nodes::Identifier> = Vec::with_capacity(func.params.len());
+            let mut params: Vec<String> = Vec::with_capacity(func.params.len());
 
             for param in func.params {
                 params.push(param);
