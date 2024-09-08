@@ -14,7 +14,7 @@ pub fn convert(program: definition::Program, type_table: SymbolTable) -> assembl
 
     let program = convert_pass.generate();
 
-    let mut pseudo_pass = pseudo_replace::PsuedoReplacePass::new(program, type_table);
+    let mut pseudo_pass = pseudo_replace::PseudoReplacePass::new(program, type_table);
 
     let pseudo_program = pseudo_pass.generate();
 

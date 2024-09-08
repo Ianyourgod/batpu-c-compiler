@@ -14,7 +14,7 @@ pub enum TopLevel {
 #[derive(Debug, Clone)]
 pub struct FuncDef {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<(String, Type)>,
     pub body: Vec<Instruction>,
     pub global: bool,
 }
@@ -38,7 +38,7 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub enum Val {
     Const(i8),
-    Var(String),
+    Var(String, Type),
     DereferencedPtr(Box<Val>),
 }
 

@@ -61,7 +61,7 @@ impl ConvertPass {
             }
             instrs.push(assembly::Instruction::Mov(
                 assembly::Operand::Register(param_regs[current_reg].clone()),
-                assembly::Operand::Pseudo(param.clone())
+                assembly::Operand::Pseudo(param.0.clone(), param.1.clone()),
             ));
             current_reg += 1;
         }
@@ -312,7 +312,7 @@ impl ConvertPass {
     fn convert_val(&mut self, val: &definition::Val) -> assembly::Operand {
         match val {
             definition::Val::Const(i) => assembly::Operand::Immediate(*i),
-            definition::Val::Var(ref s) => assembly::Operand::Pseudo(s.clone()),
+            definition::Val::Var(ref s, ref t) => assembly::Operand::Pseudo(s.clone(), t.clone()),
             definition::Val::DereferencedPtr(_) => panic!("Dereferenced pointers are not supported"),
         }
     }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::parser::nodes::{self, SymbolTable};
 use crate::code_gen::assembly;
 
-pub struct PsuedoReplacePass {
+pub struct PseudoReplacePass {
     program: assembly::Program,
     symbol_table: HashMap<String, i16>,
     type_table: SymbolTable,
@@ -13,9 +13,9 @@ struct Context {
     pub stack_offset: i16,
 }
 
-impl PsuedoReplacePass {
-    pub fn new(program: assembly::Program, type_table: SymbolTable) -> PsuedoReplacePass {
-        PsuedoReplacePass {
+impl PseudoReplacePass {
+    pub fn new(program: assembly::Program, type_table: SymbolTable) -> PseudoReplacePass {
+        PseudoReplacePass {
             program,
             symbol_table: HashMap::new(),
             type_table: type_table,
@@ -126,9 +126,16 @@ impl PsuedoReplacePass {
         }
     }
 
+    fn get_type_size(&self, ty: &nodes::Type) -> i16 {
+        match ty {
+            nodes::Type::Int | nodes::Type::Pointer(_) => 1,
+            nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
+        }
+    }
+
     fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context) -> assembly::Operand {
         match operand {
-            assembly::Operand::Pseudo(ref ident) => {
+            assembly::Operand::Pseudo(ref ident, ref ty) => {
                 let is_static = self.type_table.contains(&ident) && matches!(self.type_table.lookup(&ident).unwrap().1, nodes::TableEntry::StaticAttr(_, _));
                 if is_static {
                     return assembly::Operand::Data(ident.clone());
@@ -141,7 +148,7 @@ impl PsuedoReplacePass {
                     );
                 }
 
-                context.stack_offset += 1;
+                context.stack_offset += self.get_type_size(ty);
 
                 self.symbol_table.insert(ident.clone(), context.stack_offset);
                 assembly::Operand::Memory(

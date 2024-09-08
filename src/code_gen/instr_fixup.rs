@@ -66,7 +66,7 @@ impl InstructionFixupPass {
 
     fn to_register(&self, op: &assembly::Operand, reg: &assembly::Register, instructions: &mut Vec<assembly::Instruction>) {
         match op {
-            assembly::Operand::Register(_) | assembly::Operand::Pseudo(_) => unreachable!(),
+            assembly::Operand::Register(_) | assembly::Operand::Pseudo(_, _) => unreachable!(),
             assembly::Operand::Immediate(val) => {
                 instructions.push(assembly::Instruction::Ldi(
                     assembly::Operand::Register(reg.clone()),

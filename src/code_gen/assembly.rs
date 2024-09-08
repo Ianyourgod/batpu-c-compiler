@@ -1,3 +1,5 @@
+pub use crate::parser::nodes::Type;
+
 #[derive(Debug, Clone)]
 pub struct Program {
     pub statements: Vec<TopLevel>,
@@ -58,7 +60,7 @@ pub enum Unop {
 pub enum Operand {
     Immediate(i8),
     Register(Register),
-    Pseudo(String),
+    Pseudo(String, Type),
     Memory(Register, i16),
     Data(String),
 }
