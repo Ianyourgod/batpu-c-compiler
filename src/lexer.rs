@@ -153,7 +153,7 @@ impl Lexer {
                     let ident = self.read_identifier();
 
                     let keywords = [
-                        "int", "void",
+                        "int", "void", "char",
                         "return",
                         "if", "else",
                         "while", "for", "do", "break", "continue",

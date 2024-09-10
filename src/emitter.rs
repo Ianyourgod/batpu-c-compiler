@@ -45,16 +45,25 @@ hlt
   str r1 r2 0
   ret
 ..mult
-  mov r0 r3
-  ..mult_loop
-  cmp r1 r0
-  brh EQ ..mult_end
-    add r3 r2 r3
-    adi r1 -1
-    jmp ..mult_loop
-  ..mult_end
-  mov r3 r1
-  ret
+  LDI r3 0
+  LDI r4 0
+  LDI r5 8
+  ..MULT_LOOP
+    LSH r4 r4
+    LSH r3 r3
+    BRH NC ..MULT_NOCARRY
+    ADI r4 1
+      ..MULT_NOCARRY
+    LSH r2 r2
+    BRH NC ..MULT_NOADD
+    ADD r1 r3 r3
+    BRH NC ..MULT_NOADD
+    ADI r4 1
+      ..MULT_NOADD
+    ADI r5 -1
+    BRH NZ ..MULT_LOOP
+  MOV r3 r1
+  RET
 ", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" });
         for tl in &self.program.statements {
             match tl {
