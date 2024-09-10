@@ -44,9 +44,15 @@ pub enum Declaration {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
     pub name: String,
-    pub expr: Option<Expression>,
+    pub expr: Option<Initializer>,
     pub storage_class: StorageClass,
     pub ty: Type,
+}
+
+#[derive(Debug, Clone)]
+pub enum Initializer {
+    Single(Expression),
+    Compound(Vec<Initializer>),
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +89,7 @@ pub enum ExpressionEnum {
     FunctionCall(String, Vec<Expression>),
     Dereference(Box<Expression>),
     AddressOf(Box<Expression>),
+    Subscript(Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -150,6 +157,7 @@ pub enum Type {
     Int,
     Fn(Vec<Type>, Box<Type>),
     Pointer(Box<Type>),
+    Array(Box<Type>, i16),
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

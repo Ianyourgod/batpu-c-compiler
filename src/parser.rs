@@ -12,6 +12,7 @@ pub struct Parser {
 enum Declarator {
     Identifier(String),
     Pointer(Box<Declarator>),
+    Array(Box<Declarator>, i16),
     Function(Vec<(nodes::Type, Declarator)>, String),
 }
 
@@ -109,7 +110,7 @@ impl Parser {
             TokenType::Identifier(ref name) => {
                 let name = name.clone();
                 self.next_token();
-                if self.current_token == TokenType::LParen {
+                if self.current_token == TokenType::LParen || self.current_token == TokenType::LBracket {
                     let decl = self.parse_declarator(Some(name.clone()));
                     return decl;
                 }
@@ -148,6 +149,18 @@ impl Parser {
                 self.next_token();
                 Declarator::Function(params, ident.unwrap())
             },
+            TokenType::LBracket => {
+                self.next_token();
+                let size = match self.current_token {
+                    TokenType::IntegerLiteral(i) => {
+                        self.next_token();
+                        i
+                    },
+                    _ => panic!("Expected integer literal, got {:?}", self.current_token),
+                };
+                self.consume(TokenType::RBracket);
+                Declarator::Array(Box::new(self.parse_declarator(ident)), size as i16)
+            },
             _ => {
                 if ident.is_some() {
                     return Declarator::Identifier(ident.unwrap());
@@ -177,6 +190,30 @@ impl Parser {
 
                 (name, nodes::Type::Fn(param_types, Box::new(base_type)), param_names)
             },
+            Declarator::Array(inner, size) => {
+                let (name, ty, ptrs) = self.process_declarator(*inner, base_type);
+                (name, nodes::Type::Array(Box::new(ty), size), ptrs)
+            },
+        }
+    }
+
+    fn parse_initializer(&mut self) -> nodes::Initializer {
+        match self.current_token {
+            TokenType::LBrace => {
+                self.next_token();
+                let mut inits: Vec<nodes::Initializer> = Vec::new();
+                while self.current_token != TokenType::RBrace {
+                    inits.push(self.parse_initializer());
+                    if self.current_token == TokenType::Comma {
+                        self.next_token();
+                    } else if self.current_token != TokenType::RBrace {
+                        panic!("Expected ',' or '}}', got {:?}", self.current_token);
+                    }
+                }
+                self.next_token();
+                nodes::Initializer::Compound(inits)
+            },
+            _ => nodes::Initializer::Single(self.parse_expression(0)),
         }
     }
 
@@ -236,7 +273,9 @@ impl Parser {
             })
         } else if self.current_token == TokenType::Equals {
             self.next_token();
-            let expr = self.parse_expression(0);
+            
+            let expr = self.parse_initializer();
+
             if self.current_token != TokenType::Semicolon {
                 panic!("Expected semicolon, got {:?}", self.current_token);
             }
@@ -493,7 +532,6 @@ impl Parser {
             if self.current_token == TokenType::Equals {
                 self.next_token();
                 expr = nodes::Expression::new(nodes::ExpressionEnum::Assign(Box::new(expr), Box::new(self.parse_expression(prec))));
-            // more fuckery :tongue:
             } else if (is_op_assign = self.is_op_assign(&self.current_token), is_op_assign.0).1 {
                 self.next_token();
                 expr = nodes::Expression::new(
@@ -532,6 +570,19 @@ impl Parser {
     }
 
     fn parse_factor(&mut self) -> nodes::Expression {
+        let fac = self.parse_primary_factor();
+        match self.current_token {
+            TokenType::LBracket => {
+                self.next_token();
+                let idx = self.parse_expression(0);
+                self.consume(TokenType::RBracket);
+                nodes::Expression::new(nodes::ExpressionEnum::Subscript(Box::new(fac), Box::new(idx)))
+            },
+            _ => fac,
+        }
+    }
+
+    fn parse_primary_factor(&mut self) -> nodes::Expression {
         let cur_tok = self.current_token.clone();
         match cur_tok {
             TokenType::IntegerLiteral(i) => {
@@ -568,9 +619,8 @@ impl Parser {
                 }
                 self.next_token();
                 expr
-            }
+            },
             _ => panic!("Unexpected token: {:?}", self.current_token),
         }
-
     }
 }

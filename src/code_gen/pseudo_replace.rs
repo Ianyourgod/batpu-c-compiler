@@ -113,9 +113,9 @@ impl PseudoReplacePass {
                 instructions.push(assembly::Instruction::Lod(src.clone(), offset.clone(), dst));
             },
             assembly::Instruction::Str(ref src, ref offset, ref dst) => {
-                let dst = self.emit_operand(dst, context);
+                let src = self.emit_operand(src, context);
 
-                instructions.push(assembly::Instruction::Str(src.clone(), offset.clone(), dst));
+                instructions.push(assembly::Instruction::Str(src, offset.clone(), dst.clone()));
             },
             assembly::Instruction::Return |
             assembly::Instruction::AllocateStack(_) |
@@ -130,6 +130,7 @@ impl PseudoReplacePass {
         match ty {
             nodes::Type::Int | nodes::Type::Pointer(_) => 1,
             nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
+            nodes::Type::Array(ty, size) => self.get_type_size(ty) * size,
         }
     }
 
@@ -148,12 +149,37 @@ impl PseudoReplacePass {
                     );
                 }
 
+                let so = context.stack_offset;
+
                 context.stack_offset += self.get_type_size(ty);
 
-                self.symbol_table.insert(ident.clone(), context.stack_offset);
+                self.symbol_table.insert(ident.clone(), so + 1);
                 assembly::Operand::Memory(
                     assembly::Register { name: "r15".to_string() },
-                    context.stack_offset
+                    so + 1,
+                )
+            },
+            assembly::Operand::PseudoMem(name, offset, ty) => {
+                let is_static = self.type_table.contains(&name) && matches!(self.type_table.lookup(&name).unwrap().1, nodes::TableEntry::StaticAttr(_, _));
+                if is_static {
+                    return assembly::Operand::Data(name.clone());
+                }
+
+                if self.symbol_table.contains_key(name) {
+                    return assembly::Operand::Memory(
+                        assembly::Register { name: "r15".to_string() },
+                        *self.symbol_table.get(name).unwrap() + offset
+                    );
+                }
+
+                let so = context.stack_offset;
+
+                context.stack_offset += self.get_type_size(ty);
+
+                self.symbol_table.insert(name.clone(), so + 1);
+                assembly::Operand::Memory(
+                    assembly::Register { name: "r15".to_string() },
+                    so + 1,
                 )
             },
             _ => operand.clone(),

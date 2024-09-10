@@ -14,10 +14,18 @@ pub fn convert(program: definition::Program, type_table: SymbolTable) -> assembl
 
     let program = convert_pass.generate();
 
+    //println!("{:#?}", program);
+
     let mut pseudo_pass = pseudo_replace::PseudoReplacePass::new(program, type_table);
 
     let pseudo_program = pseudo_pass.generate();
 
+    //println!("{:#?}", pseudo_program);
+
     let instr_fixup_pass = instr_fixup::InstructionFixupPass::new(pseudo_program);
-    instr_fixup_pass.generate()
+    let fixup_program = instr_fixup_pass.generate();
+
+    //println!("{:#?}", fixup_program);
+
+    fixup_program
 }

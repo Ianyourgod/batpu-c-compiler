@@ -38,7 +38,7 @@ pub enum Instruction {
     AllocateStack(u8),
     //DeallocateStack(u8),
     Lod(Register, i16, Operand),
-    Str(Register, i16, Operand),
+    Str(Operand, i16, Register),
     Jmp(String),
     JmpCC(CondCode, String),
     Label(String),
@@ -61,6 +61,7 @@ pub enum Operand {
     Immediate(i8),
     Register(Register),
     Pseudo(String, Type),
+    PseudoMem(String, i16, Type),
     Memory(Register, i16),
     Data(String),
 }

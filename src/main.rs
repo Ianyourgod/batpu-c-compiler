@@ -114,8 +114,12 @@ fn compile(input: String) -> String {
     #[allow(unused_variables)]
     let (program, symbol_table) = semantic_analysis::resolve(program);
 
+    //println!("{:#?}", program);
+
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone());
     let program = tacky.emit();
+
+    //println!("{:#?}", program);
 
     let assembly = code_gen::convert(program, symbol_table);
     let emitter = emitter::Emitter::new(assembly);

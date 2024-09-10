@@ -66,7 +66,7 @@ impl InstructionFixupPass {
 
     fn to_register(&self, op: &assembly::Operand, reg: &assembly::Register, instructions: &mut Vec<assembly::Instruction>) {
         match op {
-            assembly::Operand::Register(_) | assembly::Operand::Pseudo(_, _) => unreachable!(),
+            assembly::Operand::Register(_) | assembly::Operand::Pseudo(_, _) | assembly::Operand::PseudoMem(_, _, _) => unreachable!(),
             assembly::Operand::Immediate(val) => {
                 instructions.push(assembly::Instruction::Ldi(
                     assembly::Operand::Register(reg.clone()),
@@ -125,9 +125,9 @@ impl InstructionFixupPass {
 
                     if is_mem {
                         instructions.push(assembly::Instruction::Str(
-                            reg,
-                            offset,
                             assembly::Operand::Register(dst_reg),
+                            offset,
+                            reg,
                         ));
                     } else {
                         panic!("Invalid destination operand: {:?}", dst);
@@ -160,9 +160,9 @@ impl InstructionFixupPass {
 
                     if is_mem {
                         instructions.push(assembly::Instruction::Str(
-                            reg,
-                            offset,
                             assembly::Operand::Register(dst_reg),
+                            offset,
+                            reg,
                         ));
                     } else {
                         panic!("Invalid destination operand: {:?}", dst);
@@ -199,9 +199,9 @@ impl InstructionFixupPass {
 
                     if is_mem {
                         instructions.push(assembly::Instruction::Str(
-                            reg,
-                            offset,
                             assembly::Operand::Register(dst_reg),
+                            offset,
+                            reg,
                         ));
                     } else {
                         panic!("Invalid destination operand: {:?}", dst);
@@ -249,7 +249,7 @@ impl InstructionFixupPass {
                     i.clone()
                 ));
 
-                instructions.push(assembly::Instruction::Str(base_reg, offset, reg));
+                instructions.push(assembly::Instruction::Str(reg, offset, base_reg));
             },
             assembly::Instruction::Lod(reg, off, dst) => {
                 // if dst is not a register, we need to put it in a temporary register then store it in dst
@@ -267,30 +267,25 @@ impl InstructionFixupPass {
                 let (is_mem, base_reg, offset) = self.is_mem(dst);
 
                 if is_mem {
-                    instructions.push(assembly::Instruction::Str(base_reg, offset, assembly::Operand::Register(dst_reg)));
+                    instructions.push(assembly::Instruction::Str(assembly::Operand::Register(dst_reg), offset, base_reg));
                 } else {
                     panic!("Invalid destination operand: {:?}", dst);
                 }
             }
             assembly::Instruction::Str(ref src, ref off, ref dst) => {
                 // if dst is not a register, we need to put it in a temporary register then store it in dst
-                let (is_dst_reg, _) = self.is_register(dst);
+                let (is_src_reg, _) = self.is_register(src);
                 
-                if is_dst_reg {
+                if is_src_reg {
                     instructions.push(stmt.clone());
                     return;
                 }
 
-                let dst_reg = assembly::Register::new("r10".to_string());
-                let (is_mem, _, _) = self.is_mem(dst);
+                let src_reg = assembly::Register::new("r10".to_string());
 
-                if !is_mem {
-                    panic!("Invalid destination operand: {:?}", dst);
-                }
+                self.to_register(src, &src_reg, instructions);
 
-                self.to_register(dst, &dst_reg, instructions);
-
-                instructions.push(assembly::Instruction::Str(src.clone(), *off, assembly::Operand::Register(dst_reg)));
+                instructions.push(assembly::Instruction::Str(assembly::Operand::Register(src_reg), *off, dst.clone()));
             }
             assembly::Instruction::Lea(ref src, ref dst) => {
                 // alright, this is a "fake" instruction
@@ -338,7 +333,7 @@ impl InstructionFixupPass {
                 let (is_mem, base_reg, offset) = self.is_mem(dst);
 
                 if is_mem {
-                    instructions.push(assembly::Instruction::Str(base_reg, offset, assembly::Operand::Register(dst_reg)));
+                    instructions.push(assembly::Instruction::Str(assembly::Operand::Register(dst_reg), offset, base_reg));
                 } else {
                     panic!("Invalid destination operand: {:?}", dst);
                 }

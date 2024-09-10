@@ -190,7 +190,7 @@ impl VariableResolution {
         
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            let val = self.resolve_expression(expr, variable_map);
+                            let val = self.resolve_init(expr, variable_map);
                             nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
                                 name: unique_name,
                                 expr: Some(val),
@@ -206,6 +206,22 @@ impl VariableResolution {
                     }
                 }
                 
+            },
+        }
+    }
+
+    fn resolve_init(&mut self, init: &nodes::Initializer, variable_map: &mut VariableMap) -> nodes::Initializer {
+        match init {
+            nodes::Initializer::Single(ref expr) => {
+                let val = self.resolve_expression(expr, variable_map);
+                nodes::Initializer::Single(val)
+            },
+            nodes::Initializer::Compound(ref inits) => {
+                let mut new_inits: Vec<nodes::Initializer> = Vec::new();
+                for init in inits {
+                    new_inits.push(self.resolve_init(init, variable_map));
+                }
+                nodes::Initializer::Compound(new_inits)
             },
         }
     }
@@ -253,12 +269,15 @@ impl VariableResolution {
                     nodes::ForInit::Declaration(ref decl) => {
                         let decl = match decl { nodes::Declaration::VarDecl(ref decl) => decl, _ => panic!("Invalid declaration") };
 
+                        let init = if decl.expr.is_some() {
+                            Some(self.resolve_init(decl.expr.as_ref().unwrap(), variable_map))
+                        } else {
+                            None
+                        } ;
+
                         let decl = nodes::VarDecl {
                             name: decl.name.clone(),
-                            expr: match decl.expr {
-                                Some(ref expr) => Some(self.resolve_expression(expr, variable_map)),
-                                None => None,
-                            },
+                            expr: init,
                             storage_class: decl.storage_class.clone(),
                             ty: decl.ty.clone(),
                         };
@@ -379,6 +398,12 @@ impl VariableResolution {
                 let expr = self.resolve_expression(expr, variable_map);
 
                 nodes::ExpressionEnum::AddressOf(Box::new(expr))
+            },
+            nodes::ExpressionEnum::Subscript(ref expr, ref index) => {
+                let expr = self.resolve_expression(expr, variable_map);
+                let index = self.resolve_expression(index, variable_map);
+
+                nodes::ExpressionEnum::Subscript(Box::new(expr), Box::new(index))
             },
         })
     }

@@ -98,14 +98,34 @@ impl Tacky {
                         // this is just assignment
                         let expr = decl.expr.as_ref().unwrap();
                         
-                        let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
-                        let name = decl.name.clone();
-
-                        body.push(definition::Instruction::Copy(definition::Val::Var(name, decl.ty.clone()), val));
+                        self.handle_initializer(expr, body, decl.name.clone(), &decl.ty, 0, true);
                     }
                     // we don't need to do anything for declarations without an expression
                 }
                 // TODO: handle function declarations
+            }
+        }
+    }
+
+    fn handle_initializer(&mut self, init: &nodes::Initializer, body: &mut Vec<definition::Instruction>, name: String, ty: &definition::Type, mut offset: i8, top_level: bool) {
+        match init {
+            nodes::Initializer::Single(ref expr) => {
+                let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
+                if !top_level {
+                    body.push(definition::Instruction::CopyToOffset(val, definition::Val::Var(name.clone(), ty.clone()), offset as i16));
+                } else {
+                    body.push(definition::Instruction::Copy(definition::Val::Var(name.clone(), ty.clone()), val));
+                }
+            }
+            nodes::Initializer::Compound(ref inits) => {
+                let inner_type = match ty {
+                    definition::Type::Array(ty, _) => ty,
+                    _ => panic!("Expected array type, got {:?}", ty),
+                };
+                for init in inits {
+                    self.handle_initializer(init, body, name.clone(), ty, offset, false);
+                    offset += self.get_type_size(&inner_type);
+                }
             }
         }
     }
@@ -176,9 +196,7 @@ impl Tacky {
 
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
-                            let name = decl.name.clone();
-                            body.push(definition::Instruction::Copy(definition::Val::Var(name, decl.ty.clone()), val));
+                            self.handle_initializer(&expr, body, decl.name.clone(), &decl.ty, 0, true);
                         }
                     }
                     nodes::ForInit::Expression(ref expr) => {
@@ -383,6 +401,25 @@ impl Tacky {
                     }
                 }
             }
+            nodes::ExpressionEnum::Subscript(ref left, ref right) => {
+                let left = self.emit_tacky_and_convert(&left.expr, body, ty);
+                let right = self.emit_tacky_and_convert(&right.expr, body, ty);
+
+                // we add, then dereference
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                
+                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(self.get_type_size(&ty)), dest.clone()));
+                definition::Val::DereferencedPtr(Box::new(dest))
+            }
+        }
+    }
+
+    fn get_type_size(&self, ty: &nodes::Type) -> i8 {
+        match ty {
+            nodes::Type::Int | nodes::Type::Pointer(_) => 1,
+            nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
+            nodes::Type::Array(ty, size) => self.get_type_size(ty) * (*size as i8),
         }
     }
 

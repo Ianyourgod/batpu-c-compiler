@@ -33,6 +33,8 @@ pub enum Instruction {
     GetAddress(Val, Val),
     Load(Val, Val),
     Store(Val, Val),
+    CopyToOffset(Val, Val, i16), // val, var, offset
+    AddPtr(Val, Val, Val, Val), // val, val, offset, dest
 }
 
 #[derive(Debug, Clone)]

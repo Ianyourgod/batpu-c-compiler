@@ -295,9 +295,9 @@ impl ConvertPass {
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
                 ));
                 instructions.push(assembly::Instruction::Str(
-                    assembly::Register::new("r1".to_string()),
-                    0,
                     self.convert_val(dst),
+                    0,
+                    assembly::Register::new("r1".to_string()),
                 ));
             },
             definition::Instruction::GetAddress(ref src, ref dst) => {
@@ -306,13 +306,56 @@ impl ConvertPass {
                     self.convert_val(dst)
                 ));
             },
+            definition::Instruction::CopyToOffset(ref val, ref var, ref offset) => {
+                let (name, ty) = match var {
+                    definition::Val::Var(name, ty) => (name.clone(), ty.clone()),
+                    _ => unreachable!(),
+                };
+                instructions.push(assembly::Instruction::Mov(
+                    self.convert_val(val),
+                    assembly::Operand::PseudoMem(name, *offset, ty)
+                ));
+            },
+            definition::Instruction::AddPtr(ref val1, ref val2, ref offset, ref dst) => {
+                // mult val2 and offset by calling "..mult"
+                let val1 = self.convert_val(val1);
+                let val2 = self.convert_val(val2);
+                let offset = self.convert_val(offset);
+                let dst = self.convert_val(dst);
+                instructions.push(assembly::Instruction::Mov(
+                    val2,
+                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                ));
+                instructions.push(assembly::Instruction::Mov(
+                    offset,
+                    assembly::Operand::Register(assembly::Register::new("r2".to_string())),
+                ));
+                instructions.push(assembly::Instruction::Call(".mult".to_string(), false));
+                // now add val1 and r1
+                instructions.push(assembly::Instruction::Binary(
+                    assembly::Binop::Subtract,
+                    val1,
+                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                    dst,
+                ));
+
+            },
         }
     }
 
     fn convert_val(&mut self, val: &definition::Val) -> assembly::Operand {
         match val {
             definition::Val::Const(i) => assembly::Operand::Immediate(*i),
-            definition::Val::Var(ref s, ref t) => assembly::Operand::Pseudo(s.clone(), t.clone()),
+            definition::Val::Var(ref s, ref t) => {
+                match t {
+                    &definition::Type::Array(_, _) => {
+                        assembly::Operand::PseudoMem(s.clone(), 0, t.clone())
+                    },
+                    _ => {
+                        assembly::Operand::Pseudo(s.clone(), t.clone())
+                    }
+                }
+            },
             definition::Val::DereferencedPtr(_) => panic!("Dereferenced pointers are not supported"),
         }
     }

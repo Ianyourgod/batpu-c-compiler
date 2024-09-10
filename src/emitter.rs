@@ -44,6 +44,17 @@ hlt
 .mem_write
   str r1 r2 0
   ret
+..mult
+  mov r0 r3
+  ..mult_loop
+  cmp r1 r0
+  brh EQ ..mult_end
+    add r3 r2 r3
+    adi r1 -1
+    jmp ..mult_loop
+  ..mult_end
+  mov r3 r1
+  ret
 ", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" });
         for tl in &self.program.statements {
             match tl {
@@ -165,13 +176,13 @@ hlt
                 let out_of_bounds = ofb_1 || *i < -7;
                 let diff = if ofb_1 { 8 - i } else { 7 + i };
                 let mut res = String::new();
-                let src = self.emit_register(src);
+                let dst = self.emit_register(dst);
                 if out_of_bounds {
                     // we add the difference to the offset
-                    res.push_str(&format!("adi {} {}\n    ", src, diff));
+                    res.push_str(&format!("adi {} {}\n    ", dst, diff));
                 }
-                res.push_str(&format!("str {} {} {}", src, self.emit_as_register(dst), -i - diff*out_of_bounds as i16));
-                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
+                res.push_str(&format!("str {} {} {}", dst, self.emit_as_register(src), -i - diff*out_of_bounds as i16));
+                if out_of_bounds { res.push_str(&format!("\n    adi {} {}", dst, -diff)) }
                 res
             }
             assembly::Instruction::Jmp(lbl) => {

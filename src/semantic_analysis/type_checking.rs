@@ -90,6 +90,65 @@ impl TypeChecker {
         })
     }
 
+    fn zero_init(&self, ty: &nodes::Type) -> nodes::Initializer {
+        match ty {
+            nodes::Type::Int => nodes::Initializer::Single(nodes::Expression {
+                expr: nodes::ExpressionEnum::IntegerLiteral(0),
+                ty: nodes::Type::Int,
+            }),
+            nodes::Type::Pointer(ty) => nodes::Initializer::Single(nodes::Expression {
+                expr: nodes::ExpressionEnum::IntegerLiteral(0),
+                ty: nodes::Type::Pointer(Box::new(*ty.clone())),
+            }),
+            nodes::Type::Array(ty, size) => {
+                let mut exprs = Vec::with_capacity(*size as usize);
+                for _ in 0..*size {
+                    exprs.push(self.zero_init(ty));
+                }
+
+                nodes::Initializer::Compound(exprs)
+            },
+            _ => panic!("Cannot zero init type {:?}", ty),
+        }
+    }
+
+    fn typecheck_initializer(&self, init: &nodes::Initializer, ty: &nodes::Type) -> nodes::Initializer {
+        match init {
+            nodes::Initializer::Single(expr) => {
+                let expr = self.typecheck_and_convert(expr);
+                let expr = self.convert_by_assignment(&expr, ty);
+
+                nodes::Initializer::Single(expr)
+            },
+            nodes::Initializer::Compound(exprs) => {
+                let mut new_exprs = Vec::with_capacity(exprs.len());
+
+                let (ty, size) = match ty {
+                    nodes::Type::Array(ty, size) => (*ty.clone(), *size),
+                    _ => panic!("Expected Array, got {:?}", ty),
+                };
+                let mut count = 0;
+                for expr in exprs {
+                    new_exprs.push(self.typecheck_initializer(expr, &ty));
+                    count += 1;
+                }
+
+                if count > size {
+                    panic!("Too many initializers");
+                } else if count < size {
+                    for _ in count..size {
+                        new_exprs.push(nodes::Initializer::Single(nodes::Expression {
+                            expr: nodes::ExpressionEnum::IntegerLiteral(0),
+                            ty: ty.clone(),
+                        }));
+                    }
+                }
+
+                nodes::Initializer::Compound(new_exprs)
+            },
+        }
+    }
+
     fn typecheck_file_scope_variable_declaration(&mut self, decl: &nodes::VarDecl) -> nodes::VarDecl {
         let mut initial_value = if decl.expr.is_none() {
             if decl.storage_class == nodes::StorageClass::Extern {
@@ -98,10 +157,17 @@ impl TypeChecker {
                 nodes::InitialValue::Tentative
             }
         // is constant (check if expr is constant)
-        } else if let nodes::ExpressionEnum::IntegerLiteral(i) = decl.expr.as_ref().unwrap().expr {
-            nodes::InitialValue::Initial(i as i32)
+        } else if let nodes::Initializer::Compound(_) = decl.expr.as_ref().unwrap() {
+            panic!("Compound initializers not supported in static");
+        } else if let nodes::Initializer::Single(expr) = decl.expr.as_ref().unwrap() {
+            let expr = self.typecheck_and_convert(expr);
+            if let nodes::ExpressionEnum::IntegerLiteral(i) = expr.expr {
+                nodes::InitialValue::Initial(i as i32)
+            } else {
+                panic!("Non-constant initializer in static declaration");
+            }
         } else {
-            nodes::InitialValue::Tentative
+            panic!("Expected Initializer, got {:?}", decl.expr.as_ref().unwrap());
         };
 
         let mut global = decl.storage_class != nodes::StorageClass::Static;
@@ -151,14 +217,14 @@ impl TypeChecker {
             nodes::Statement::Break(_) | nodes::Statement::Continue(_) |
             nodes::Statement::Empty => stmt.clone(),
             nodes::Statement::Return(expr) => {
-                let ret_expr = self.typecheck_expression(expr);
+                let ret_expr = self.typecheck_and_convert(expr);
 
                 let ret_expr = self.convert_by_assignment(&ret_expr, ret_type);
 
                 nodes::Statement::Return(ret_expr)
             },
             nodes::Statement::Expression(expr) => {
-                let expr = self.typecheck_expression(expr);
+                let expr = self.typecheck_and_convert(expr);
 
                 nodes::Statement::Expression(expr)
             },
@@ -167,7 +233,7 @@ impl TypeChecker {
                 nodes::Statement::Compound(block.clone())
             },
             nodes::Statement::If(expr, block, else_block) => {
-                let expr = self.typecheck_expression(expr);
+                let expr = self.typecheck_and_convert(expr);
                 let block = self.typecheck_statement(block, ret_type);
                 let else_block = if else_block.is_some() {
                     Some(self.typecheck_statement(else_block.as_ref().as_ref().unwrap(), ret_type)) // im sorry
@@ -178,28 +244,28 @@ impl TypeChecker {
                 nodes::Statement::If(expr.clone(), Box::new(block.clone()), Box::new(else_block))
             },
             nodes::Statement::While(expr, block, _) => {
-                let expr = self.typecheck_expression(expr);
+                let expr = self.typecheck_and_convert(expr);
                 let block = self.typecheck_statement(block, ret_type);
 
                 nodes::Statement::While(expr.clone(), Box::new(block.clone()), String::new())
             },
             nodes::Statement::DoWhile(block, expr, label) => {
                 let block = self.typecheck_statement(block, ret_type);
-                let expr = self.typecheck_expression(expr);
+                let expr = self.typecheck_and_convert(expr);
 
                 nodes::Statement::DoWhile(Box::new(block), expr.clone(), label.clone())
             },
             nodes::Statement::For(init, cond, post, block, label) => {
                 let init = match init {
                     nodes::ForInit::Declaration(decl) => nodes::ForInit::Declaration(self.typecheck_variable_declaration(&self.decl_to_var(decl))),
-                    nodes::ForInit::Expression(expr) => nodes::ForInit::Expression(self.typecheck_expression(expr)),
+                    nodes::ForInit::Expression(expr) => nodes::ForInit::Expression(self.typecheck_and_convert(expr)),
                     nodes::ForInit::Empty => nodes::ForInit::Empty,
                 };
                 let cond = if let Some(cond_expr) = cond.as_ref() {
-                    Some(self.typecheck_expression(cond_expr))
+                    Some(self.typecheck_and_convert(cond_expr))
                 } else { None };
                 let post = if let Some(expr) = post.as_ref() {
-                    Some(self.typecheck_expression(expr))
+                    Some(self.typecheck_and_convert(expr))
                 } else { None };
                 let block = self.typecheck_statement(block, ret_type);
 
@@ -266,7 +332,7 @@ impl TypeChecker {
 
                 let mut new_args = args.clone();
                 for (idx, arg) in args.iter().enumerate() {
-                    new_args.push(self.convert_by_assignment(&self.typecheck_expression(arg), &fn_type[idx]));
+                    new_args.push(self.convert_by_assignment(&self.typecheck_and_convert(arg), &fn_type[idx]));
                 }
 
                 nodes::Expression {
@@ -291,11 +357,15 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Assign(ref lhs, ref rhs) => {
-                let lft = self.typecheck_expression(&*lhs);
-                let rht = self.typecheck_expression(&*rhs);
+                let lft = self.typecheck_and_convert(&*lhs);
+                let rht = self.typecheck_and_convert(&*rhs);
 
                 if lft.ty != rht.ty {
                     panic!("Incompatible types in assignment");
+                }
+
+                if !self.is_lvalue(&lft) {
+                    panic!("Assignment to non-lvalue");
                 }
 
                 let ty = lft.ty.clone();
@@ -306,9 +376,9 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Conditional(ref cond, ref then, ref els) => {
-                let cond = self.typecheck_expression(&*cond);
-                let then = self.typecheck_expression(&*then);
-                let els = self.typecheck_expression(&*els);
+                let cond = self.typecheck_and_convert(&*cond);
+                let then = self.typecheck_and_convert(&*then);
+                let els = self.typecheck_and_convert(&*els);
 
                 let common_type = if self.is_pointer_type(&then.ty) || self.is_pointer_type(&els.ty) {
                     self.get_common_pointer_type(&then, &els)
@@ -325,7 +395,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Increment(ref inner_expr) => {
-                let inner_expr = self.typecheck_expression(&*inner_expr);
+                let inner_expr = self.typecheck_and_convert(&*inner_expr);
 
                 let ty = inner_expr.ty.clone();
 
@@ -335,7 +405,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Decrement(ref inner_expr) => {
-                let inner_expr = self.typecheck_expression(&*inner_expr);
+                let inner_expr = self.typecheck_and_convert(&*inner_expr);
 
                 let ty = inner_expr.ty.clone();
 
@@ -345,7 +415,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Unop(unop, ref expr) => {
-                let expr = self.typecheck_expression(&*expr);
+                let expr = self.typecheck_and_convert(&*expr);
 
                 if self.is_pointer_type(&expr.ty) {
                     match unop {
@@ -385,8 +455,8 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Binop(binop, ref lhs,  ref rhs) => {
-                let left = self.typecheck_expression(&*lhs);
-                let right = self.typecheck_expression(&*rhs);
+                let left = self.typecheck_and_convert(&*lhs);
+                let right = self.typecheck_and_convert(&*rhs);
 
                 match binop {
                     nodes::Binop::And | nodes::Binop::Or => {
@@ -432,7 +502,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Dereference(ref expr) => {
-                let expr = self.typecheck_expression(&*expr);
+                let expr = self.typecheck_and_convert(&*expr);
                 let ty = match expr.ty { nodes::Type::Pointer(ref ty) => *ty.clone(), _ => panic!("Expected Ptr, got {:?}", expr.ty) };
 
                 nodes::Expression {
@@ -445,10 +515,42 @@ impl TypeChecker {
                     panic!("Address of non-lvalue");
                 }
 
-                let expr = self.typecheck_expression(&*expr);
+                let expr = self.typecheck_and_convert(&*expr);
+
                 let ty = nodes::Type::Pointer(Box::new(expr.ty.clone()));
                 nodes::Expression {
                     expr: nodes::ExpressionEnum::AddressOf(Box::new(expr)),
+                    ty,
+                }
+            },
+            nodes::ExpressionEnum::Subscript(ref left, ref right) => {
+                let left = self.typecheck_and_convert(&*left);
+                let right = self.typecheck_and_convert(&*right);
+
+                // check if both are pointer, xor
+                let lft_ptr = self.is_pointer_type(&left.ty);
+                let rht_ptr = self.is_pointer_type(&right.ty);
+                let one_pointer = lft_ptr ^ rht_ptr;
+                let one_int = left.ty == nodes::Type::Int || right.ty == nodes::Type::Int;
+
+                if !(one_pointer && one_int) {
+                    panic!("Invalid types in subscript");
+                }
+
+                let ty = if lft_ptr {
+                    match left.ty {
+                        nodes::Type::Pointer(ref ty) => *ty.clone(),
+                        _ => panic!("Expected Ptr, got {:?}", left.ty),
+                    }
+                } else {
+                    match right.ty {
+                        nodes::Type::Pointer(ref ty) => *ty.clone(),
+                        _ => panic!("Expected Ptr, got {:?}", right.ty),
+                    }
+                };
+
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::Subscript(Box::new(left), Box::new(right)),
                     ty,
                 }
             },
@@ -456,10 +558,25 @@ impl TypeChecker {
         }
     }
 
+    fn typecheck_and_convert(&self, expr: &nodes::Expression) -> nodes::Expression {
+        let expr = self.typecheck_expression(expr);
+
+        match &expr.ty {
+            nodes::Type::Array(ty, _) => {
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::AddressOf(Box::new(expr.clone())),
+                    ty: nodes::Type::Pointer(Box::new(*ty.clone())),
+                }
+            },
+            _ => expr,
+        }
+    }
+
     fn is_lvalue(&self, expr: &nodes::Expression) -> bool {
         match expr.expr {
             nodes::ExpressionEnum::Var(_) => true,
             nodes::ExpressionEnum::Dereference(_) => true,
+            nodes::ExpressionEnum::Subscript(_, _) => true,
             _ => false,
         }
     }
@@ -467,6 +584,21 @@ impl TypeChecker {
     fn get_common_type(&self, lhs: &nodes::Type, rhs: &nodes::Type) -> nodes::Type {
         if lhs == rhs {
             return lhs.clone();
+        }
+
+        if self.is_pointer_type(lhs) || self.is_pointer_type(rhs) {
+            let inner_type = if self.is_pointer_type(lhs) {
+                match lhs {
+                    nodes::Type::Pointer(ty) => *ty.clone(),
+                    _ => panic!("Expected Ptr, got {:?}", lhs),
+                }
+            } else {
+                match rhs {
+                    nodes::Type::Pointer(ty) => *ty.clone(),
+                    _ => panic!("Expected Ptr, got {:?}", rhs),
+                }
+            };
+            return nodes::Type::Pointer(Box::new(inner_type));
         }
 
         return nodes::Type::Int;
@@ -500,9 +632,7 @@ impl TypeChecker {
     fn typecheck_variable_declaration(&mut self, decl: &nodes::VarDecl) -> nodes::Declaration {
         self.symbol_table.insert(decl.name.clone(), (decl.ty.clone(), nodes::TableEntry::LocalAttr));
         let expr = if decl.expr.is_some() {
-            let expr = self.typecheck_expression(decl.expr.as_ref().unwrap());
-
-            let expr = self.convert_by_assignment(&expr, &decl.ty);
+            let expr = self.typecheck_initializer(decl.expr.as_ref().unwrap(), &decl.ty);
 
             Some(expr)
         } else { None };

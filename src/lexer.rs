@@ -21,6 +21,8 @@ pub enum TokenType {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     Semicolon,
     Comma,
     // Operators
@@ -102,6 +104,8 @@ impl Lexer {
             ')' => TokenType::RParen,
             '{' => TokenType::LBrace,
             '}' => TokenType::RBrace,
+            '[' => TokenType::LBracket,
+            ']' => TokenType::RBracket,
             ';' => TokenType::Semicolon,
             ',' => TokenType::Comma,
             '+' => after_char!(self, self.peek_char(),
