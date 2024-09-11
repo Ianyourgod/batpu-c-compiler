@@ -91,6 +91,7 @@ pub enum ExpressionEnum {
     Dereference(Box<Expression>),
     AddressOf(Box<Expression>),
     Subscript(Box<Expression>, Box<Expression>),
+    Cast(Type, Box<Expression>),
 }
 
 #[derive(Debug, Clone, Copy)]

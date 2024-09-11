@@ -369,7 +369,7 @@ impl TypeChecker {
                 let rht = self.typecheck_and_convert(&*rhs);
 
                 if lft.ty != rht.ty {
-                    panic!("Incompatible types in assignment");
+                    panic!("Incompatible types in assignment, {:?} and {:?}", lft.ty, rht.ty);
                 }
 
                 if !self.is_lvalue(&lft) {
@@ -563,6 +563,14 @@ impl TypeChecker {
                 };
 
                 out
+            },
+            nodes::ExpressionEnum::Cast(ref ty, ref expr) => {
+                let expr = self.typecheck_and_convert(&*expr);
+
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::Cast(ty.clone(), Box::new(expr)),
+                    ty: ty.clone(),
+                }
             },
             nodes::ExpressionEnum::CharLiteral(ch) => nodes::Expression {
                 expr: nodes::ExpressionEnum::CharLiteral(ch),

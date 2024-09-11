@@ -16,6 +16,13 @@ enum Declarator {
     Function(Vec<(nodes::Type, Declarator)>, String),
 }
 
+#[derive(Debug)]
+enum AbstractDeclarator {
+    Pointer(Box<AbstractDeclarator>),
+    Array(Box<AbstractDeclarator>, i16),
+    Base,
+}
+
 impl Parser {
     pub fn new(mut lexer: Lexer) -> Parser {
         let current_token = lexer.next_token();
@@ -584,6 +591,53 @@ impl Parser {
         }
     }
 
+    fn parse_abstract_declarator(&mut self) -> AbstractDeclarator {
+        match self.current_token {
+            TokenType::Star => {
+                self.next_token();
+                AbstractDeclarator::Pointer(Box::new(self.parse_abstract_declarator()))
+            },
+            TokenType::LParen => {
+                self.next_token();
+                let decl = self.parse_abstract_declarator();
+                self.consume(TokenType::RParen);
+                decl
+            },
+            TokenType::LBracket => {
+                self.next_token();
+                let size = match self.current_token {
+                    TokenType::IntegerLiteral(i) => {
+                        self.next_token();
+                        i
+                    },
+                    _ => panic!("Expected integer literal, got {:?}", self.current_token),
+                };
+                self.consume(TokenType::RBracket);
+                let inner = self.parse_abstract_declarator();
+                match inner {
+                    AbstractDeclarator::Array(_, _) | AbstractDeclarator::Base => (),
+                    a => panic!("Expected array, found {:?}", a)
+                }
+                AbstractDeclarator::Array(Box::new(inner), size as i16)
+            },
+            _ => AbstractDeclarator::Base,
+        }
+    }
+
+    fn process_abstract_declarator(&mut self, declarator: AbstractDeclarator, base_type: nodes::Type) -> nodes::Type {
+        match declarator {
+            AbstractDeclarator::Pointer(inner) => {
+                let ty = self.process_abstract_declarator(*inner, base_type);
+                nodes::Type::Pointer(Box::new(ty))
+            },
+            AbstractDeclarator::Array(inner, size) => {
+                let ty = self.process_abstract_declarator(*inner, base_type);
+                nodes::Type::Array(Box::new(ty), size)
+            },
+            AbstractDeclarator::Base => base_type,
+        }
+    }
+
     fn parse_primary_factor(&mut self) -> nodes::Expression {
         let cur_tok = self.current_token.clone();
         match cur_tok {
@@ -619,6 +673,33 @@ impl Parser {
             TokenType::Star | TokenType::Ampersand => self.parse_unop(),
             TokenType::LParen => {
                 self.next_token();
+
+                if self.is_valid_var_starter(&self.current_token) {
+                    // explicit cast
+                    let mut types: Vec<TokenType> = Vec::new();
+
+                    while self.is_valid_var_starter(&self.current_token) {
+                        types.push(self.current_token.clone());
+                        self.next_token();
+                    }
+
+                    let (type_, spec) = self.parse_type_and_storage_class(types);
+
+                    if spec != nodes::StorageClass::Auto {
+                        panic!("Cast cannot have storage class");
+                    }
+
+                    // parse abstract declarator
+                    let decl = self.parse_abstract_declarator();
+                    let type_ = self.process_abstract_declarator(decl, type_);
+
+                    self.consume(TokenType::RParen);
+
+                    let expr = self.parse_expression(0);
+
+                    return nodes::Expression::new(nodes::ExpressionEnum::Cast(type_, Box::new(expr)));
+                }
+
                 let expr = self.parse_expression(0);
                 if self.current_token != TokenType::RParen {
                     panic!("Expected ')', got {:?}", self.current_token);

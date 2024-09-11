@@ -137,7 +137,7 @@ impl PseudoReplacePass {
         }
     }
 
-    fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context, _instructions: &mut Vec<assembly::Instruction>) -> assembly::Operand {
+    fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context, instructions: &mut Vec<assembly::Instruction>) -> assembly::Operand {
         match operand {
             assembly::Operand::Pseudo(ref ident, ref ty) => {
                 let is_static = self.type_table.contains(&ident) && matches!(self.type_table.lookup(&ident).unwrap().1, nodes::TableEntry::StaticAttr(_, _));
@@ -146,6 +146,8 @@ impl PseudoReplacePass {
                 }
 
                 if self.symbol_table.contains_key(ident) {
+                    instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, *self.symbol_table.get(ident).unwrap())));
+
                     return assembly::Operand::Memory(
                         assembly::Register { name: "r15".to_string() },
                         *self.symbol_table.get(ident).unwrap()
@@ -155,6 +157,8 @@ impl PseudoReplacePass {
                 let so = context.stack_offset;
 
                 context.stack_offset += self.get_type_size(ty);
+
+                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
 
                 self.symbol_table.insert(ident.clone(), so + 1);
                 assembly::Operand::Memory(
@@ -169,6 +173,8 @@ impl PseudoReplacePass {
                 }
 
                 if self.symbol_table.contains_key(name) {
+                    instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, *self.symbol_table.get(name).unwrap())));
+
                     return assembly::Operand::Memory(
                         assembly::Register { name: "r15".to_string() },
                         *self.symbol_table.get(name).unwrap() + offset
@@ -178,6 +184,8 @@ impl PseudoReplacePass {
                 let so = context.stack_offset;
 
                 context.stack_offset += self.get_type_size(ty);
+
+                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
 
                 self.symbol_table.insert(name.clone(), so + 1);
                 assembly::Operand::Memory(

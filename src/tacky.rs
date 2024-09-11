@@ -415,6 +415,9 @@ impl Tacky {
             nodes::ExpressionEnum::CharLiteral(ch) => {
                 definition::Val::Const(Self::char_to_int(*ch))
             }
+            nodes::ExpressionEnum::Cast(_, ref expr) => {
+                self.emit_tacky_and_convert(&expr.expr, body, ty)
+            }
         }
     }
 

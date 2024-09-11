@@ -419,6 +419,11 @@ impl VariableResolution {
 
                 nodes::ExpressionEnum::Subscript(Box::new(expr), Box::new(index))
             },
+            nodes::ExpressionEnum::Cast(ty, ref expr) => {
+                let expr = self.resolve_expression(expr, variable_map);
+
+                nodes::ExpressionEnum::Cast(ty, Box::new(expr))
+            },
         })
     }
 }
