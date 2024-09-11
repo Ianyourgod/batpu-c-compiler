@@ -320,7 +320,7 @@ impl Tacky {
                         return rval;
                     }
                     _ => {
-                        body.push(definition::Instruction::Copy(rval, lval.clone()));
+                        body.push(definition::Instruction::Copy(lval.clone(), rval.clone()));
                         return lval;
                     }
                 }

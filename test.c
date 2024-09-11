@@ -18,14 +18,19 @@ static int main() {
     int *screen_draw_x = (int *) 240;
     int *screen_draw_y = (int *) 241;
 
-    for (int y=0;y<32;y++) {
-        //for (int x=0;x<32;x++) {
-            *screen_draw_x = y;
-            *screen_draw_y = y;
+    for (int y=0;y<32;y+=2) {
+        for (int x=0;x<32;x++) {
+            *screen_draw_x = x+y;
+            *screen_draw_y = x;
 
             mem_write(242, 1);
-        //}
+            mem_write(245, 1);
+        }
+        x--;
     }
 
     mem_write(245, 1);
+
+    return 0;
 }
+
