@@ -100,6 +100,8 @@ impl InstructionFixupPass {
 
     fn generate_instruction(&self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>) {
         match stmt {
+            assembly::Instruction::Comment(_) => instructions.push(stmt.clone()),
+
             assembly::Instruction::Mov(ref src, ref dst) => {
                 let (is_src_reg, src_reg) = self.is_register(src);
                 let (is_dst_reg, dst_reg) = self.is_register(dst);

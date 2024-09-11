@@ -269,26 +269,40 @@ impl VariableResolution {
                     nodes::ForInit::Declaration(ref decl) => {
                         let decl = match decl { nodes::Declaration::VarDecl(ref decl) => decl, _ => panic!("Invalid declaration") };
 
-                        let init = if decl.expr.is_some() {
-                            Some(self.resolve_init(decl.expr.as_ref().unwrap(), variable_map))
-                        } else {
-                            None
-                        } ;
+                        if variable_map.contains_key(&decl.name) {
+                            let old_decl = variable_map.get(&decl.name).unwrap();
+                            if old_decl.from_current_scope && !(old_decl.has_external_linkage && decl.storage_class == nodes::StorageClass::Extern) {
+                                panic!("Conflicting local declarations of variable {:?}", decl.name);
+                            }
+                        }
 
-                        let decl = nodes::VarDecl {
-                            name: decl.name.clone(),
-                            expr: init,
-                            storage_class: decl.storage_class.clone(),
-                            ty: decl.ty.clone(),
-                        };
-                        let var = &decl.name;
-                        variable_map.insert(var.clone(), VarData {
-                            name: var.clone(),
+                        if decl.storage_class == nodes::StorageClass::Extern {
+                            panic!("Cannot declare extern variables in for loop");
+                        }
+        
+                        let orig_name = decl.name.clone();
+        
+                        let unique_name = self.generate_unique_name("loopvar", &orig_name);
+
+                        variable_map.insert(decl.name.clone(), VarData {
+                            name: unique_name.clone(),
                             has_expr: decl.expr.is_some(),
-                            has_external_linkage: decl.storage_class == nodes::StorageClass::Extern,
                             from_current_scope: true,
+                            has_external_linkage: false,
                         });
-                        nodes::ForInit::Declaration(nodes::Declaration::VarDecl(decl))
+        
+                        if decl.expr.is_some() {
+                            let expr = decl.expr.as_ref().unwrap();
+                            let val = self.resolve_init(expr, variable_map);
+                            nodes::ForInit::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
+                                name: unique_name,
+                                expr: Some(val),
+                                storage_class: decl.storage_class,
+                                ty: decl.ty.clone(),
+                            }))
+                        } else {
+                            nodes::ForInit::Empty
+                        }
                     },
                     nodes::ForInit::Expression(ref expr) => {
                         let expr = self.resolve_expression(expr, variable_map);
@@ -336,7 +350,7 @@ impl VariableResolution {
 
                 nodes::ExpressionEnum::Unop(op.clone(), Box::new(src))
             },
-            nodes::ExpressionEnum::IntegerLiteral(_) => expr.expr.clone(),
+            nodes::ExpressionEnum::IntegerLiteral(_) | nodes::ExpressionEnum::CharLiteral(_) => expr.expr.clone(),
             nodes::ExpressionEnum::Var(ref ident) => {
                 if variable_map.contains_key(ident) {
                     nodes::ExpressionEnum::Var(variable_map.get(ident).unwrap().name.clone())

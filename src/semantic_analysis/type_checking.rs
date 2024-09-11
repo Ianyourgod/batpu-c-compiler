@@ -73,10 +73,13 @@ impl TypeChecker {
                 _ => panic!("Expected Fn, got {:?}", decl.ty)
             };
 
-            match self.typecheck_block(&decl.body, &ret_type) {
+            let body = match self.typecheck_block(&decl.body, &ret_type) {
                 nodes::Statement::Compound(body) => body,
                 _ => unreachable!()
-            }
+            };
+
+            body
+
         } else {
             Vec::new()
         };
@@ -229,8 +232,12 @@ impl TypeChecker {
                 nodes::Statement::Expression(expr)
             },
             nodes::Statement::Compound(block) => {
-                self.typecheck_block(block, ret_type);
-                nodes::Statement::Compound(block.clone())
+                let block = match self.typecheck_block(block, ret_type) {
+                    nodes::Statement::Compound(items) => items,
+                    e => panic!("Expected compound, found {:?}", e)
+                };
+
+                nodes::Statement::Compound(block)
             },
             nodes::Statement::If(expr, block, else_block) => {
                 let expr = self.typecheck_and_convert(expr);
@@ -550,10 +557,16 @@ impl TypeChecker {
                     }
                 };
 
-                nodes::Expression {
+                let out = nodes::Expression {
                     expr: nodes::ExpressionEnum::Subscript(Box::new(left), Box::new(right)),
                     ty,
-                }
+                };
+
+                out
+            },
+            nodes::ExpressionEnum::CharLiteral(ch) => nodes::Expression {
+                expr: nodes::ExpressionEnum::CharLiteral(ch),
+                ty: nodes::Type::Char,
             },
             nodes::ExpressionEnum::IntegerLiteral(_) => expr.clone(),
         }

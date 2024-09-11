@@ -81,7 +81,7 @@ impl Parser {
             panic!("Invalid storage class");
         }
 
-        let type_ = nodes::Type::Int;
+        let type_ = types[0].clone();
 
         let storage_class = if st_cl_len == 1 { storage_classes[0] } else { nodes::StorageClass::Auto };
 
@@ -584,27 +584,6 @@ impl Parser {
         }
     }
 
-    fn char_to_int(ch: char) -> i8 {
-        /*
-         0 - SPACE
-         1 - 26 - A - Z
-         27 - .
-         28 - !
-         29 - ?
-         */
-
-        let ch = ch.to_ascii_lowercase();
-
-        match ch {
-            ' ' => 0,
-            'a'..='z' => ch as i8 - 96,
-            '.' => 27,
-            '!' => 28,
-            '?' => 29,
-            _ => panic!("Invalid character: {:?}", ch),
-        }
-    }
-
     fn parse_primary_factor(&mut self) -> nodes::Expression {
         let cur_tok = self.current_token.clone();
         match cur_tok {
@@ -614,7 +593,7 @@ impl Parser {
             }
             TokenType::CharLiteral(ch) => {
                 self.next_token();
-                nodes::Expression::new(nodes::ExpressionEnum::IntegerLiteral(Parser::char_to_int(ch)))
+                nodes::Expression::new(nodes::ExpressionEnum::CharLiteral(ch))
             }
             TokenType::Identifier(ident) => {
                 self.next_token();

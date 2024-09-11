@@ -212,6 +212,10 @@ hlt
                 format!("cal .{}{}", lbl, if *global { ":global" } else { "" })
             }
 
+            assembly::Instruction::Comment(ref s) => {
+                format!("// {}", s)
+            }
+
             assembly::Instruction::Lea(_, _) => unreachable!(),
         }
     }

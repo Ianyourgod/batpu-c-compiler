@@ -66,54 +66,56 @@ impl PseudoReplacePass {
 
     fn generate_instruction(&mut self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>, context: &mut Context) {
         match stmt {
+            assembly::Instruction::Comment(_) => instructions.push(stmt.clone()),
+
             assembly::Instruction::Unary(ref op, ref src, ref dst) => {
-                let src = self.emit_operand(src, context);
-                let dst = self.emit_operand(dst, context);
+                let src = self.emit_operand(src, context, instructions);
+                let dst = self.emit_operand(dst, context, instructions);
 
                 instructions.push(assembly::Instruction::Unary(op.clone(), src, dst));
             },
             assembly::Instruction::Binary(ref op, ref src1, ref src2, ref dst) => {
-                let src1 = self.emit_operand(src1, context);
-                let src2 = self.emit_operand(src2, context);
-                let dst = self.emit_operand(dst, context);
+                let src1 = self.emit_operand(src1, context, instructions);
+                let src2 = self.emit_operand(src2, context, instructions);
+                let dst = self.emit_operand(dst, context, instructions);
 
                 instructions.push(assembly::Instruction::Binary(op.clone(), src1, src2, dst));
             },
             assembly::Instruction::Mov(ref src, ref dst) => {
-                let src = self.emit_operand(src, context);
-                let dst = self.emit_operand(dst, context);
+                let src = self.emit_operand(src, context, instructions);
+                let dst = self.emit_operand(dst, context, instructions);
 
                 instructions.push(assembly::Instruction::Mov(src, dst));
             },
             assembly::Instruction::Ldi(ref dst, ref imm) => {
-                let dst = self.emit_operand(dst, context);
+                let dst = self.emit_operand(dst, context, instructions);
 
                 instructions.push(assembly::Instruction::Ldi(dst, imm.clone()));
             },
             assembly::Instruction::Adi(ref src, ref imm) => {
-                let src = self.emit_operand(src, context);
+                let src = self.emit_operand(src, context, instructions);
 
                 instructions.push(assembly::Instruction::Adi(src, imm.clone()));
             },
             assembly::Instruction::Cmp(ref src1, ref src2) => {
-                let src1 = self.emit_operand(src1, context);
-                let src2 = self.emit_operand(src2, context);
+                let src1 = self.emit_operand(src1, context, instructions);
+                let src2 = self.emit_operand(src2, context, instructions);
 
                 instructions.push(assembly::Instruction::Cmp(src1, src2));
             }
             assembly::Instruction::Lea(ref src, ref dst) => {
-                let src = self.emit_operand(src, context);
-                let dst = self.emit_operand(dst, context);
+                let src = self.emit_operand(src, context, instructions);
+                let dst = self.emit_operand(dst, context, instructions);
 
                 instructions.push(assembly::Instruction::Lea(src, dst));
             },
             assembly::Instruction::Lod(ref src, ref offset, ref dst) => {
-                let dst = self.emit_operand(dst, context);
+                let dst = self.emit_operand(dst, context, instructions);
 
                 instructions.push(assembly::Instruction::Lod(src.clone(), offset.clone(), dst));
             },
             assembly::Instruction::Str(ref src, ref offset, ref dst) => {
-                let src = self.emit_operand(src, context);
+                let src = self.emit_operand(src, context, instructions);
 
                 instructions.push(assembly::Instruction::Str(src, offset.clone(), dst.clone()));
             },
@@ -135,7 +137,7 @@ impl PseudoReplacePass {
         }
     }
 
-    fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context) -> assembly::Operand {
+    fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context, _instructions: &mut Vec<assembly::Instruction>) -> assembly::Operand {
         match operand {
             assembly::Operand::Pseudo(ref ident, ref ty) => {
                 let is_static = self.type_table.contains(&ident) && matches!(self.type_table.lookup(&ident).unwrap().1, nodes::TableEntry::StaticAttr(_, _));

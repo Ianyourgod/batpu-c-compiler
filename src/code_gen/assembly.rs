@@ -46,6 +46,8 @@ pub enum Instruction {
     Call(String, bool),
     Return,
 
+    Comment(String),
+
     // "fake" instruction
     Lea(Operand, Operand),
 }

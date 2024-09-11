@@ -411,7 +411,31 @@ impl Tacky {
                 
                 body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(self.get_type_size(&ty)), dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
+            },
+            nodes::ExpressionEnum::CharLiteral(ch) => {
+                definition::Val::Const(Self::char_to_int(*ch))
             }
+        }
+    }
+
+    fn char_to_int(ch: char) -> i8 {
+        /*
+         0 - SPACE
+         1 - 26 - A - Z
+         27 - .
+         28 - !
+         29 - ?
+         */
+
+        let ch = ch.to_ascii_lowercase();
+
+        match ch {
+            ' ' => 0,
+            'a'..='z' => ch as i8 - 96,
+            '.' => 27,
+            '!' => 28,
+            '?' => 29,
+            _ => panic!("Invalid character: {:?}", ch),
         }
     }
 

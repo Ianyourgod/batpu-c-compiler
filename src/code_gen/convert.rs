@@ -331,7 +331,6 @@ impl ConvertPass {
                     assembly::Operand::Register(assembly::Register::new("r2".to_string())),
                 ));
                 instructions.push(assembly::Instruction::Call(".mult".to_string(), false));
-
                 // if r1 is bigger than the address of val1, we need to swap them
                 instructions.push(assembly::Instruction::Cmp(
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),

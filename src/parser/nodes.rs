@@ -79,6 +79,7 @@ impl Expression {
 #[derive(Debug, Clone)]
 pub enum ExpressionEnum {
     IntegerLiteral(i8),
+    CharLiteral(char),
     Unop(Unop, Box<Expression>),
     Binop(Binop, Box<Expression>, Box<Expression>),
     Var(String),
