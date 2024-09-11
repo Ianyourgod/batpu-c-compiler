@@ -66,6 +66,7 @@ impl Parser {
 
             match specifier.as_str() {
                 "int" => types.push(nodes::Type::Int),
+                "char" => types.push(nodes::Type::Char),
                 "extern" => storage_classes.push(nodes::StorageClass::Extern),
                 "static" => storage_classes.push(nodes::StorageClass::Static),
                 _ => panic!("Invalid type specifier, {:?}", specifier),
@@ -92,6 +93,7 @@ impl Parser {
             TokenType::Keyword(kwd) => {
                 match kwd.as_str() {
                     "int" => true,
+                    "char" => true,
                     "extern" => true,
                     "static" => true,
                     _ => false,
@@ -406,7 +408,7 @@ impl Parser {
         // parse forinit
         let for_init = if self.current_token == TokenType::Semicolon {
             nodes::ForInit::Empty
-        } else if self.current_token == TokenType::Keyword("int".to_string()) {
+        } else if self.is_valid_var_starter(&self.current_token) {
             let decl = self.parse_declaration(); // consumes semicolon
             nodes::ForInit::Declaration(decl)
         } else {
@@ -582,12 +584,37 @@ impl Parser {
         }
     }
 
+    fn char_to_int(ch: char) -> i8 {
+        /*
+         0 - SPACE
+         1 - 26 - A - Z
+         27 - .
+         28 - !
+         29 - ?
+         */
+
+        let ch = ch.to_ascii_lowercase();
+
+        match ch {
+            ' ' => 0,
+            'a'..='z' => ch as i8 - 96,
+            '.' => 27,
+            '!' => 28,
+            '?' => 29,
+            _ => panic!("Invalid character: {:?}", ch),
+        }
+    }
+
     fn parse_primary_factor(&mut self) -> nodes::Expression {
         let cur_tok = self.current_token.clone();
         match cur_tok {
             TokenType::IntegerLiteral(i) => {
                 self.next_token();
                 nodes::Expression::new(nodes::ExpressionEnum::IntegerLiteral(i))
+            }
+            TokenType::CharLiteral(ch) => {
+                self.next_token();
+                nodes::Expression::new(nodes::ExpressionEnum::IntegerLiteral(Parser::char_to_int(ch)))
             }
             TokenType::Identifier(ident) => {
                 self.next_token();

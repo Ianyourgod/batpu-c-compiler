@@ -53,6 +53,7 @@ pub enum TokenType {
     // Literals
     Identifier(String),
     IntegerLiteral(i8),
+    CharLiteral(char),
     // End of file
     EOF,
     // Error
@@ -145,6 +146,16 @@ impl Lexer {
                 TokenType::GreaterThan,
                 ('=', TokenType::GreaterThanEqual)
             ),
+            '\'' => {
+                self.read_char();
+                let ch = self.ch;
+                self.read_char();
+                if self.ch == '\'' {
+                    TokenType::CharLiteral(ch)
+                } else {
+                    TokenType::Illegal
+                }
+            },
             '?' => TokenType::QuestionMark,
             ':' => TokenType::Colon,
             '\0' => TokenType::EOF,
@@ -217,10 +228,10 @@ impl Lexer {
         while is_digit(self.ch) {
             self.read_char();
         }
-        let num = self.input[start..self.position].parse::<i8>();
+        let num = self.input[start..self.position].parse::<i16>();
 
         match num {
-            Ok(n) => n,
+            Ok(n) => n as i8,
             Err(_) => panic!("Failed to parse number"),
         }
     }

@@ -417,7 +417,8 @@ impl Tacky {
 
     fn get_type_size(&self, ty: &nodes::Type) -> i8 {
         match ty {
-            nodes::Type::Int | nodes::Type::Pointer(_) => 1,
+            nodes::Type::Int | nodes::Type::Pointer(_) |
+            nodes::Type::Char => 1,
             nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
             nodes::Type::Array(ty, size) => self.get_type_size(ty) * (*size as i8),
         }

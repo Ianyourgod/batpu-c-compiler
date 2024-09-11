@@ -330,13 +330,14 @@ impl TypeChecker {
 
                 let (fn_type, ret_type) = match ident_type.0 { nodes::Type::Fn(ref args, ref ret_type) => (args, ret_type), _ => panic!("Expected Fn, got {:?}", ident_type.0) };
 
-                let mut new_args = args.clone();
+                let mut new_args = Vec::with_capacity(args.len());
                 for (idx, arg) in args.iter().enumerate() {
-                    new_args.push(self.convert_by_assignment(&self.typecheck_and_convert(arg), &fn_type[idx]));
+                    let arg = self.typecheck_and_convert(arg);
+                    new_args.push(self.convert_by_assignment(&arg, &fn_type[idx]));
                 }
 
                 nodes::Expression {
-                    expr: nodes::ExpressionEnum::FunctionCall(ident.clone(), args.clone()),
+                    expr: nodes::ExpressionEnum::FunctionCall(ident.clone(), new_args.clone()),
                     ty: *ret_type.clone(),
                 }
             },

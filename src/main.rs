@@ -12,6 +12,7 @@ pub struct Settings {
     pub input_names: Vec<String>,
     pub output_name: String,
     pub do_not_link: bool,
+    pub do_not_assemble: bool,
 }
 
 fn parse_args() -> Settings {
@@ -22,6 +23,7 @@ fn parse_args() -> Settings {
     let mut link_files = Vec::new();
     let mut output_name = "output.mc".to_string();
     let mut do_not_link = false;
+    let mut do_not_assemble = false;
 
     args.nth(0);
     while 1 <= args.len() {
@@ -36,6 +38,9 @@ fn parse_args() -> Settings {
             },
             "-l" => {
                 link_files.push(args.nth(0).unwrap());
+            },
+            "-n" => {
+                do_not_assemble = true;
             },
             _ => {
                 input_names.push(arg);
@@ -52,6 +57,7 @@ fn parse_args() -> Settings {
         output_name,
         input_names,
         do_not_link,
+        do_not_assemble,
     }
 }
 
@@ -122,6 +128,9 @@ fn compile(input: String) -> String {
     //println!("{:#?}", program);
 
     let assembly = code_gen::convert(program, symbol_table);
+
+    //println!("{:#?}", assembly);
+
     let emitter = emitter::Emitter::new(assembly);
     let output = emitter.emit();
     output
@@ -140,5 +149,7 @@ fn main() {
         outputs.push(output);
     }
 
-    assemble(outputs, args.link_files, args.output_name, args.do_not_link);
+    if !args.do_not_assemble {
+        assemble(outputs, args.link_files, args.output_name, args.do_not_link);
+    }
 }

@@ -289,13 +289,13 @@ impl ConvertPass {
                 ));
             },
             definition::Instruction::Store(ref src, ref dst) => {
-                let src = self.convert_val(src);
+                let dst = self.convert_val(dst);
                 instructions.push(assembly::Instruction::Mov(
-                    src,
+                    dst,
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
                 ));
                 instructions.push(assembly::Instruction::Str(
-                    self.convert_val(dst),
+                    self.convert_val(src),
                     0,
                     assembly::Register::new("r1".to_string()),
                 ));
@@ -332,7 +332,7 @@ impl ConvertPass {
                 ));
                 instructions.push(assembly::Instruction::Call(".mult".to_string(), false));
 
-                // if r1 is bigger than val1, we need to swap them
+                // if r1 is bigger than the address of val1, we need to swap them
                 instructions.push(assembly::Instruction::Cmp(
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
                     val1.clone(),

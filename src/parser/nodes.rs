@@ -155,6 +155,7 @@ impl SymbolTable {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int,
+    Char,
     Fn(Vec<Type>, Box<Type>),
     Pointer(Box<Type>),
     Array(Box<Type>, i16),
