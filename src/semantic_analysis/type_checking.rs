@@ -63,15 +63,17 @@ impl TypeChecker {
 
         self.symbol_table.insert(ident.clone(), (decl.ty.clone(), attrs));
 
-        let body = if has_body {
-            for param in &decl.params {
-                self.symbol_table.insert(param.clone(), (nodes::Type::Int, nodes::TableEntry::LocalAttr));
-            }
+        let (param_types, ret_type) = match &decl.ty {
+            nodes::Type::Fn(args, ret) => (args, ret),
+            _ => panic!("Expected Fn, got {:?}", decl.ty),
+        };
 
-            let ret_type = match decl.ty.clone() {
-                nodes::Type::Fn(_, ret) => *ret,
-                _ => panic!("Expected Fn, got {:?}", decl.ty)
-            };
+        let body = if has_body {
+
+            for (idx, param) in decl.params.iter().enumerate() {
+                let param_type = &param_types[idx];
+                self.symbol_table.insert(param.clone(), (param_type.clone(), nodes::TableEntry::LocalAttr));
+            }
 
             let body = match self.typecheck_block(&decl.body, &ret_type) {
                 nodes::Statement::Compound(body) => body,
