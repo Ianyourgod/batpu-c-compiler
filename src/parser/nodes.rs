@@ -16,7 +16,7 @@ pub struct FuncDecl {
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Return(Expression),
+    Return(Option<Expression>),
     Expression(Expression),
     If(Expression, Box<Statement>, Box<Option<Statement>>),
     Compound(Vec<BlockItem>),
@@ -92,6 +92,8 @@ pub enum ExpressionEnum {
     AddressOf(Box<Expression>),
     Subscript(Box<Expression>, Box<Expression>),
     Cast(Type, Box<Expression>),
+    SizeOf(Box<Expression>),
+    SizeOfType(Type),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -161,6 +163,20 @@ pub enum Type {
     Fn(Vec<Type>, Box<Type>),
     Pointer(Box<Type>),
     Array(Box<Type>, i16),
+
+    Void,
+}
+
+impl Type {
+    pub fn size(&self) -> i16 {
+        match self {
+            Type::Int | Type::Pointer(_) | Type::Char => 1,
+            Type::Fn(_, _) => panic!("Function types should not be used in this context"),
+            Type::Array(ty, size) => ty.size() * size,
+
+            Type::Void => 1, // void is weird
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

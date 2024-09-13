@@ -229,8 +229,13 @@ impl VariableResolution {
     fn resolve_statement(&mut self, stmt: &nodes::Statement, variable_map: &mut VariableMap) -> nodes::Statement {
         match stmt {
             nodes::Statement::Return(ref expr) => {
-                let val = self.resolve_expression(expr, variable_map);
-                nodes::Statement::Return(val)
+                match expr {
+                    Some(expr) => {
+                        let val = self.resolve_expression(expr, variable_map);
+                        nodes::Statement::Return(Some(val))
+                    }
+                    None => nodes::Statement::Return(None)
+                }
             },
             nodes::Statement::Expression(ref expr) => {
                 let val = self.resolve_expression(expr, variable_map);
@@ -424,6 +429,12 @@ impl VariableResolution {
 
                 nodes::ExpressionEnum::Cast(ty, Box::new(expr))
             },
+            nodes::ExpressionEnum::SizeOf(ref expr) => {
+                let expr = self.resolve_expression(expr, variable_map);
+
+                nodes::ExpressionEnum::SizeOf(Box::new(expr))
+            },
+            nodes::ExpressionEnum::SizeOfType(_) => expr.expr.clone(),
         })
     }
 }

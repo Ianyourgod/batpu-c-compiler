@@ -128,6 +128,13 @@ impl ConvertPass {
         match stmt {
             definition::Instruction::Return(ref val) => {
                 // move the value to r1
+                if val.is_none() {
+                    instructions.push(assembly::Instruction::Return);
+                    return;
+                }
+
+                let val = val.as_ref().unwrap();
+
                 instructions.push(assembly::Instruction::Mov(
                     self.convert_val(val),
                     assembly::Operand::Register(assembly::Register::new("r1".to_string()))
@@ -271,9 +278,13 @@ impl ConvertPass {
                 }
 
                 instructions.push(assembly::Instruction::Call(name.clone(), *global));
+
+                if dst.is_none() {
+                    return;
+                }
                 instructions.push(assembly::Instruction::Mov(
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
-                    self.convert_val(dst)
+                    self.convert_val(dst.as_ref().unwrap())
                 ));
             },
             definition::Instruction::Load(ref src, ref dst) => {

@@ -47,6 +47,8 @@ impl InstructionFixupPass {
             self.generate_instruction(stmt, &mut instrs);
         }
 
+        instrs.push(assembly::Instruction::AllocateStack(-func.stack_size as u8));
+
         let func = assembly::FuncDecl {
             name: func.name.clone(),
             body: instrs,

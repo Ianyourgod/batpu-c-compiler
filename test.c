@@ -1,8 +1,7 @@
-static int add2ToNumber(int *num){
-    *num = *num + 2;
+static void test(){
+    int a = 1;
 }
 
 static int main(){
-    int a = 12;
-    add2ToNumber(&a);
+    void b = test();
 }

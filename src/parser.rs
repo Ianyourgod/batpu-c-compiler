@@ -74,6 +74,7 @@ impl Parser {
             match specifier.as_str() {
                 "int" => types.push(nodes::Type::Int),
                 "char" => types.push(nodes::Type::Char),
+                "void" => types.push(nodes::Type::Void),
                 "extern" => storage_classes.push(nodes::StorageClass::Extern),
                 "static" => storage_classes.push(nodes::StorageClass::Static),
                 _ => panic!("Invalid type specifier, {:?}", specifier),
@@ -101,6 +102,7 @@ impl Parser {
                 match kwd.as_str() {
                     "int" => true,
                     "char" => true,
+                    "void" => true,
                     "extern" => true,
                     "static" => true,
                     _ => false,
@@ -449,6 +451,11 @@ impl Parser {
     fn parse_return_statement(&mut self) -> nodes::Statement {
         self.next_token();
 
+        if self.current_token == TokenType::Semicolon {
+            self.next_token();
+            return nodes::Statement::Return(None);
+        }
+
         let expr = self.parse_expression(0);
 
         if self.current_token != TokenType::Semicolon {
@@ -457,7 +464,7 @@ impl Parser {
 
         self.next_token();
 
-        nodes::Statement::Return(expr)
+        nodes::Statement::Return(Some(expr))
     }
 
     fn parse_unop(&mut self) -> nodes::Expression {
@@ -503,6 +510,12 @@ impl Parser {
             TokenType::QuestionMark => 5,
             TokenType::Equals |
             TokenType::AddAssign | TokenType::SubAssign => 1,
+
+            TokenType::Keyword(kwd) => match kwd.as_str() {
+                "sizeof" => 2,
+                _ => -1,
+            },
+            
             _ => -1,
         }
     }
@@ -560,6 +573,22 @@ impl Parser {
                 self.consume(TokenType::Colon);
                 let right = self.parse_expression(prec);
                 expr = nodes::Expression::new(nodes::ExpressionEnum::Conditional(Box::new(expr), Box::new(middle), Box::new(right)));
+            } else if self.current_token == TokenType::Keyword("sizeof".to_string()) {
+                self.next_token();
+                let peek_token = self.lexer.peek_token();
+                if self.current_token == TokenType::LParen && self.is_valid_var_starter(&peek_token) {
+                    self.next_token();
+                    let mut types: Vec<TokenType> = Vec::new();
+                    while self.is_valid_var_starter(&self.current_token) {
+                        types.push(self.current_token.clone());
+                        self.next_token();
+                    }
+                    let (type_, _) = self.parse_type_and_storage_class(types);
+                    self.consume(TokenType::RParen);
+                    expr = nodes::Expression::new(nodes::ExpressionEnum::SizeOfType(type_));
+                } else {
+                    expr = nodes::Expression::new(nodes::ExpressionEnum::SizeOf(Box::new(self.parse_expression(prec))));
+                }
             } else if self.current_token == TokenType::Increment || self.current_token == TokenType::Decrement {
                 if self.current_token == TokenType::Increment {
                     expr = nodes::Expression::new(nodes::ExpressionEnum::Increment(Box::new(expr)));

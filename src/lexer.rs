@@ -165,10 +165,11 @@ impl Lexer {
 
                     let keywords = [
                         "int", "void", "char",
+                        "static", "extern",
                         "return",
                         "if", "else",
                         "while", "for", "do", "break", "continue",
-                        "static", "extern",
+                        "sizeof",
                     ];
                     if keywords.contains(&ident.as_str()) {
                         return TokenType::Keyword(ident);
@@ -184,6 +185,17 @@ impl Lexer {
         };
 
         self.read_char();
+        tok
+    }
+
+    pub fn peek_token(&mut self) -> TokenType {
+        let pos = self.position;
+        let read_pos = self.read_position;
+        let ch = self.ch;
+        let tok = self.next_token();
+        self.position = pos;
+        self.read_position = read_pos;
+        self.ch = ch;
         tok
     }
 

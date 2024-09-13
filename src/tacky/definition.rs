@@ -21,7 +21,7 @@ pub struct FuncDef {
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    Return(Val),
+    Return(Option<Val>),
     Unary(Unop, Val, Val),
     Binary(Binop, Val, Val, Val),
     Copy(Val, Val),
@@ -29,7 +29,7 @@ pub enum Instruction {
     JumpIfZero(Val, String),
     JumpIfNotZero(Val, String),
     Label(String),
-    FunCall(String, Vec<Val>, Val, bool), // bool is for if global
+    FunCall(String, Vec<Val>, Option<Val>, bool), // bool is for if global
     GetAddress(Val, Val),
     Load(Val, Val),
     Store(Val, Val),

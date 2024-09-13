@@ -124,7 +124,7 @@ impl Tacky {
                 };
                 for init in inits {
                     self.handle_initializer(init, body, name.clone(), ty, offset, false);
-                    offset += self.get_type_size(&inner_type);
+                    offset += inner_type.size() as i8;
                 }
             }
         }
@@ -133,7 +133,10 @@ impl Tacky {
     fn emit_statement(&mut self, stmt: &nodes::Statement, body: &mut Vec<definition::Instruction>) {
         match stmt {
             nodes::Statement::Return(ref expr) => {
-                let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
+                let val = match expr {
+                    Some(expr) => Some(self.emit_tacky_and_convert(&expr.expr, body, &expr.ty)),
+                    None => None,
+                };
                 body.push(definition::Instruction::Return(val));
             }
             nodes::Statement::Expression(ref expr) => {
@@ -326,20 +329,29 @@ impl Tacky {
                 }
             }
             nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
-                let dest_name = self.make_temporary();
-                let dest = definition::Val::Var(dest_name.clone(), lft.ty.clone());
                 let e2_label = self.make_temporary();
                 let end_label = self.make_temporary();
                 let cond = self.emit_tacky_and_convert(&cond.expr, body, ty);
                 body.push(definition::Instruction::JumpIfZero(cond, e2_label.clone()));
                 let v1 = self.emit_tacky_and_convert(&lft.expr, body, ty);
-                body.push(definition::Instruction::Copy(dest.clone(), v1));
-                body.push(definition::Instruction::Jump(end_label.clone()));
-                body.push(definition::Instruction::Label(e2_label));
-                let v2 = self.emit_tacky_and_convert(&rht.expr, body, ty);
-                body.push(definition::Instruction::Copy(dest.clone(), v2));
-                body.push(definition::Instruction::Label(end_label));
-                dest
+                if ty == &nodes::Type::Void {
+                    body.push(definition::Instruction::Jump(end_label.clone()));
+                    body.push(definition::Instruction::Label(e2_label));
+                    self.emit_tacky_and_convert(&rht.expr, body, ty);
+                    body.push(definition::Instruction::Label(end_label));
+                    definition::Val::Const(0)
+                } else {
+                    let dest_name = self.make_temporary();
+                    let dest = definition::Val::Var(dest_name.clone(), lft.ty.clone());
+
+                    body.push(definition::Instruction::Copy(dest.clone(), v1));
+                    body.push(definition::Instruction::Jump(end_label.clone()));
+                    body.push(definition::Instruction::Label(e2_label));
+                    let v2 = self.emit_tacky_and_convert(&rht.expr, body, ty);
+                    body.push(definition::Instruction::Copy(dest.clone(), v2));
+                    body.push(definition::Instruction::Label(end_label));
+                    dest
+                }
             }
             nodes::ExpressionEnum::Increment(ref expr) => {
                 let expr = match expr.expr {
@@ -378,10 +390,18 @@ impl Tacky {
                     _ => false,
                 };
 
-                let dest_name = self.make_temporary();
-                let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                let dest = match ty {
+                    definition::Type::Void => None,
+                    _ => Some(definition::Val::Var(self.make_temporary(), ty.clone())),
+                };
+
                 body.push(definition::Instruction::FunCall(ident.clone(), arg_vals, dest.clone(), is_global));
-                dest
+                
+                if dest.is_some() {
+                    dest.unwrap()
+                } else {
+                    definition::Val::Const(0)
+                }
             }
             nodes::ExpressionEnum::Dereference(ref expr) => {
                 let res = self.emit_tacky_and_convert(&expr.expr, body, ty);
@@ -409,14 +429,25 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                 
-                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(self.get_type_size(&ty)), dest.clone()));
+                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(ty.size() as i8), dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
             nodes::ExpressionEnum::CharLiteral(ch) => {
                 definition::Val::Const(Self::char_to_int(*ch))
             }
-            nodes::ExpressionEnum::Cast(_, ref expr) => {
-                self.emit_tacky_and_convert(&expr.expr, body, ty)
+            nodes::ExpressionEnum::Cast(to, ref expr) => {
+                if to == &nodes::Type::Void {
+                    self.emit_tacky_and_convert(&expr.expr, body, to);
+                    return definition::Val::Const(0);
+                }
+
+                self.emit_tacky_and_convert(&expr.expr, body, to)
+            }
+            nodes::ExpressionEnum::SizeOf(expr) => {
+                definition::Val::Const(expr.ty.size() as i8)
+            }
+            nodes::ExpressionEnum::SizeOfType(ty) => {
+                definition::Val::Const(ty.size() as i8)
             }
         }
     }
@@ -439,15 +470,6 @@ impl Tacky {
             '!' => 28,
             '?' => 29,
             _ => panic!("Invalid character: {:?}", ch),
-        }
-    }
-
-    fn get_type_size(&self, ty: &nodes::Type) -> i8 {
-        match ty {
-            nodes::Type::Int | nodes::Type::Pointer(_) |
-            nodes::Type::Char => 1,
-            nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
-            nodes::Type::Array(ty, size) => self.get_type_size(ty) * (*size as i8),
         }
     }
 

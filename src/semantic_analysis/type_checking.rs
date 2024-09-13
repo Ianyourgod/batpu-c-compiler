@@ -59,6 +59,8 @@ impl TypeChecker {
             global = old_decl.1.1 || global;
         }
 
+        self.validate_type_specifier(&decl.ty);
+
         let attrs = nodes::TableEntry::FnAttr(already_defined || has_body, global);
 
         self.symbol_table.insert(ident.clone(), (decl.ty.clone(), attrs));
@@ -69,9 +71,15 @@ impl TypeChecker {
         };
 
         let body = if has_body {
-
             for (idx, param) in decl.params.iter().enumerate() {
                 let param_type = &param_types[idx];
+
+                if param_type == &nodes::Type::Void {
+                    panic!("Cannot declare variable of type void");
+                }
+        
+                self.validate_type_specifier(param_type);
+
                 self.symbol_table.insert(param.clone(), (param_type.clone(), nodes::TableEntry::LocalAttr));
             }
 
@@ -222,11 +230,23 @@ impl TypeChecker {
             nodes::Statement::Break(_) | nodes::Statement::Continue(_) |
             nodes::Statement::Empty => stmt.clone(),
             nodes::Statement::Return(expr) => {
+                if expr.is_none() && *ret_type != nodes::Type::Void {
+                    panic!("Expected return value");
+                } else if expr.is_some() && *ret_type == nodes::Type::Void {
+                    panic!("Unexpected return value");
+                }
+
+                if expr.is_none() {
+                    return nodes::Statement::Return(None);
+                }
+
+                let expr = expr.as_ref().unwrap();
+
                 let ret_expr = self.typecheck_and_convert(expr);
 
                 let ret_expr = self.convert_by_assignment(&ret_expr, ret_type);
 
-                nodes::Statement::Return(ret_expr)
+                nodes::Statement::Return(Some(ret_expr))
             },
             nodes::Statement::Expression(expr) => {
                 let expr = self.typecheck_and_convert(expr);
@@ -294,14 +314,43 @@ impl TypeChecker {
         let left_type = &left.ty;
         let right_type = &rht.ty;
 
+        let left_is_ptr = self.is_pointer_type(left_type);
+        let right_is_ptr = self.is_pointer_type(right_type);
+
         if left_type == right_type {
             return left_type.clone();
         } else if self.is_null_pointer(left) {
             return right_type.clone();
         } else if self.is_null_pointer(rht) {
             return left_type.clone();
+        } else if (self.is_void_ptr(left_type) || self.is_void_ptr(right_type)) && left_is_ptr && right_is_ptr {
+            return nodes::Type::Pointer(Box::new(nodes::Type::Void));
+        } else if left_is_ptr && right_is_ptr {
+            let left_inner = match left_type {
+                nodes::Type::Pointer(ty) => ty,
+                _ => panic!("Expected Ptr, got {:?}", left_type),
+            };
+            let right_inner = match right_type {
+                nodes::Type::Pointer(ty) => ty,
+                _ => panic!("Expected Ptr, got {:?}", right_type),
+            };
+
+            if left_inner == right_inner {
+                return left_type.clone();
+            } else {
+                panic!("Incompatible pointer types");
+            }
+        } else if left_is_ptr {
+            return left_type.clone();
         } else {
             panic!("Incompatible pointer types");
+        }
+    }
+
+    fn is_void_ptr(&self, ty: &nodes::Type) -> bool {
+        match ty {
+            nodes::Type::Pointer(ref ty) => **ty == nodes::Type::Void,
+            _ => false,
         }
     }
 
@@ -317,13 +366,20 @@ impl TypeChecker {
             return expr.clone();
         }
 
-        if self.is_null_pointer(expr) {
-            return nodes::Expression {
-                expr: nodes::ExpressionEnum::IntegerLiteral(0),
-                ty: ty.clone(),
-            };
+        if (self.is_arithmetic_type(&expr.ty) && self.is_arithmetic_type(ty)) ||
+           (self.is_null_pointer(expr) && self.is_pointer_type(ty)) ||
+           (self.is_void_ptr(&expr.ty) && self.is_pointer_type(ty)) ||
+           (self.is_void_ptr(ty) && self.is_pointer_type(&expr.ty)) {
+            return self.convert_to(expr.clone(), ty);
         } else {
             panic!("Incompatible types in assignment, expected {:?}, got {:?}", ty, expr.ty);
+        }
+    }
+
+    fn is_arithmetic_type(&self, ty: &nodes::Type) -> bool {
+        match ty {
+            nodes::Type::Int => true,
+            _ => false,
         }
     }
 
@@ -380,8 +436,10 @@ impl TypeChecker {
 
                 let ty = lft.ty.clone();
 
+                let right = self.convert_by_assignment(&rht, &ty);
+
                 nodes::Expression {
-                    expr: nodes::ExpressionEnum::Assign(Box::new(lft), Box::new(rht)),
+                    expr: nodes::ExpressionEnum::Assign(Box::new(lft), Box::new(right)),
                     ty,
                 }
             },
@@ -390,10 +448,19 @@ impl TypeChecker {
                 let then = self.typecheck_and_convert(&*then);
                 let els = self.typecheck_and_convert(&*els);
 
-                let common_type = if self.is_pointer_type(&then.ty) || self.is_pointer_type(&els.ty) {
+                if !self.is_scalar_type(&cond.ty) {
+                    panic!("Invalid type for conditional");
+                }
+
+                
+                let common_type = if then.ty == nodes::Type::Void && els.ty == nodes::Type::Void {
+                    nodes::Type::Void
+                } else if self.is_pointer_type(&then.ty) || self.is_pointer_type(&els.ty) {
                     self.get_common_pointer_type(&then, &els)
-                } else {
+                } else if self.is_arithmetic_type(&then.ty) && self.is_arithmetic_type(&els.ty) {
                     self.get_common_type(&then.ty, &els.ty)
+                } else {
+                    panic!("Invalid types in conditional");
                 };
 
                 let converted_left = then;
@@ -427,6 +494,10 @@ impl TypeChecker {
             nodes::ExpressionEnum::Unop(unop, ref expr) => {
                 let expr = self.typecheck_and_convert(&*expr);
 
+                if !self.is_scalar_type(&expr.ty) {
+                    panic!("Invalid type for unary operator");
+                }
+
                 if self.is_pointer_type(&expr.ty) {
                     match unop {
                         nodes::Unop::BitwiseNot => panic!("Bitwise not on pointer"),
@@ -445,6 +516,12 @@ impl TypeChecker {
                         }
                     }
                     nodes::Unop::Negate => {
+                        let expr = if expr.ty == nodes::Type::Char {
+                            self.convert_to(expr, &nodes::Type::Int)
+                        } else {
+                            expr
+                        };
+
                         if expr.ty != nodes::Type::Int {
                             panic!("Negation of non-integer type");
                         }
@@ -478,8 +555,10 @@ impl TypeChecker {
                     nodes::Binop::Equal | nodes::Binop::NotEqual => {
                         let common_type = if self.is_pointer_type(&left.ty) || self.is_pointer_type(&right.ty) {
                             self.get_common_pointer_type(&left, &right)
-                        } else {
+                        } else if self.is_arithmetic_type(&left.ty) && self.is_arithmetic_type(&right.ty) {
                             self.get_common_type(&left.ty, &right.ty)
+                        } else {
+                            panic!("Invalid types in comparison");
                         };
 
                         let converted_left = left;
@@ -495,8 +574,8 @@ impl TypeChecker {
 
                 let common_type = self.get_common_type(&left.ty, &right.ty);
 
-                let converted_left = left;
-                let converted_right = right;
+                let converted_left = self.convert_to(left, &common_type);
+                let converted_right = self.convert_to(right, &common_type);
 
                 match binop {
                     nodes::Binop::Add | nodes::Binop::Subtract => 
@@ -514,6 +593,10 @@ impl TypeChecker {
             nodes::ExpressionEnum::Dereference(ref expr) => {
                 let expr = self.typecheck_and_convert(&*expr);
                 let ty = match expr.ty { nodes::Type::Pointer(ref ty) => *ty.clone(), _ => panic!("Expected Ptr, got {:?}", expr.ty) };
+
+                if ty == nodes::Type::Void {
+                    panic!("Dereference of void pointer");
+                }
 
                 nodes::Expression {
                     expr: nodes::ExpressionEnum::Dereference(Box::new(expr)),
@@ -569,9 +652,35 @@ impl TypeChecker {
             nodes::ExpressionEnum::Cast(ref ty, ref expr) => {
                 let expr = self.typecheck_and_convert(&*expr);
 
+                if !self.is_scalar_type(ty) {
+                    panic!("Invalid type in cast");
+                } else if !self.is_scalar_type(&expr.ty) {
+                    panic!("Invalid type in cast");
+                }
+
                 nodes::Expression {
                     expr: nodes::ExpressionEnum::Cast(ty.clone(), Box::new(expr)),
                     ty: ty.clone(),
+                }
+            },
+            nodes::ExpressionEnum::SizeOfType(ref ty) => {
+                self.validate_type_specifier(ty);
+                if !self.is_complete_type(ty) {
+                    panic!("Incomplete type in sizeof");
+                }
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::SizeOfType(ty.clone()),
+                    ty: nodes::Type::Int,
+                }
+            },
+            nodes::ExpressionEnum::SizeOf(ref expr) => {
+                let expr = self.typecheck_and_convert(&*expr);
+                if !self.is_complete_type(&expr.ty) {
+                    panic!("Cant get size of incomplete type");
+                }
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::SizeOf(Box::new(expr)),
+                    ty: nodes::Type::Int,
                 }
             },
             nodes::ExpressionEnum::CharLiteral(ch) => nodes::Expression {
@@ -579,6 +688,41 @@ impl TypeChecker {
                 ty: nodes::Type::Char,
             },
             nodes::ExpressionEnum::IntegerLiteral(_) => expr.clone(),
+        }
+    }
+
+    fn is_complete_type(&self, ty: &nodes::Type) -> bool {
+        match ty {
+            nodes::Type::Void => false,
+            _ => true,
+        }
+    }
+
+    fn is_pointer_to_complete_type(&self, ty: &nodes::Type) -> bool {
+        match ty {
+            nodes::Type::Pointer(ty) => self.is_complete_type(ty),
+            _ => false,
+        }
+    }
+
+    fn validate_type_specifier(&self, ty: &nodes::Type) {
+        match ty {
+            nodes::Type::Array(ty, _) => {
+                if !self.is_complete_type(ty) {
+                    panic!("Incomplete type in array declaration");
+                }
+                self.validate_type_specifier(ty);
+            },
+            nodes::Type::Pointer(ty) => {
+                self.validate_type_specifier(ty);
+            },
+            nodes::Type::Fn(args, ret) => {
+                for arg in args {
+                    self.validate_type_specifier(arg);
+                }
+                self.validate_type_specifier(ret);
+            },
+            _ => (),
         }
     }
 
@@ -602,6 +746,29 @@ impl TypeChecker {
             nodes::ExpressionEnum::Dereference(_) => true,
             nodes::ExpressionEnum::Subscript(_, _) => true,
             _ => false,
+        }
+    }
+
+    fn convert_to(&self, expr: nodes::Expression, ty: &nodes::Type) -> nodes::Expression {
+        if expr.ty == *ty {
+            return expr.clone();
+        }
+
+        return nodes::Expression {
+            expr: nodes::ExpressionEnum::Cast(ty.clone(), Box::new(expr)),
+            ty: ty.clone(),
+        };
+    }
+
+    fn is_scalar_type(&self, ty: &nodes::Type) -> bool {
+        match ty {
+            nodes::Type::Array(_, _) |
+            nodes::Type::Fn(_, _) |
+            nodes::Type::Void => false,
+
+            nodes::Type::Pointer(_) |
+            nodes::Type::Int |
+            nodes::Type::Char => true,
         }
     }
 
@@ -660,6 +827,12 @@ impl TypeChecker {
 
             Some(expr)
         } else { None };
+
+        if decl.ty == nodes::Type::Void {
+            panic!("Cannot declare variable of type void");
+        }
+
+        self.validate_type_specifier(&decl.ty);
 
         nodes::Declaration::VarDecl(nodes::VarDecl {
             name: decl.name.clone(),

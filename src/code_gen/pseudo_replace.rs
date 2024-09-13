@@ -128,15 +128,6 @@ impl PseudoReplacePass {
         }
     }
 
-    fn get_type_size(&self, ty: &nodes::Type) -> i16 {
-        match ty {
-            nodes::Type::Int | nodes::Type::Pointer(_) |
-            nodes::Type::Char => 1,
-            nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
-            nodes::Type::Array(ty, size) => self.get_type_size(ty) * size,
-        }
-    }
-
     fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context, instructions: &mut Vec<assembly::Instruction>) -> assembly::Operand {
         match operand {
             assembly::Operand::Pseudo(ref ident, ref ty) => {
@@ -156,7 +147,7 @@ impl PseudoReplacePass {
 
                 let so = context.stack_offset;
 
-                context.stack_offset += self.get_type_size(ty);
+                context.stack_offset += ty.size();
 
                 instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
 
@@ -183,7 +174,7 @@ impl PseudoReplacePass {
 
                 let so = context.stack_offset;
 
-                context.stack_offset += self.get_type_size(ty);
+                context.stack_offset += ty.size();
 
                 instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
 
