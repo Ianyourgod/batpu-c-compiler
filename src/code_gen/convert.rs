@@ -328,7 +328,7 @@ impl ConvertPass {
                 ));
             },
             definition::Instruction::AddPtr(ref val1, ref val2, ref offset, ref dst) => {
-                // mult val2 and offset by calling "..mult"
+                // mult val2 and offset by calling "__mult"
                 let val1 = self.convert_val(val1);
                 let val2 = self.convert_val(val2);
                 let offset = self.convert_val(offset);
@@ -341,7 +341,7 @@ impl ConvertPass {
                     offset,
                     assembly::Operand::Register(assembly::Register::new("r2".to_string())),
                 ));
-                instructions.push(assembly::Instruction::Call(".mult".to_string(), false));
+                instructions.push(assembly::Instruction::Call("__mult".to_string(), false));
                 instructions.push(assembly::Instruction::Binary(
                     assembly::Binop::Add,
                     val1,

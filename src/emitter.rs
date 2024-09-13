@@ -52,7 +52,7 @@ impl Emitter {
 
     pub fn emit(&self) -> String {
         let (contains_main, main_global) = self.has_function_named("main");
-        let uses_mult = self.uses_function_named(".mult");
+        let uses_mult = self.uses_function_named("__mult");
         let uses_malloc = self.uses_function_named("malloc");
         let mut output = format!("
 ldi r14 239
@@ -71,7 +71,7 @@ hlt
 {}
 ", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" },
 if uses_mult {
-"..mult
+".__mult
   LDI r3 0
   ..MULT_LOOP
     ADI r2 -1

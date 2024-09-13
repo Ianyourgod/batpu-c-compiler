@@ -272,11 +272,11 @@ impl TypeChecker {
 
                 nodes::Statement::If(expr.clone(), Box::new(block.clone()), Box::new(else_block))
             },
-            nodes::Statement::While(expr, block, _) => {
+            nodes::Statement::While(expr, block, label) => {
                 let expr = self.typecheck_and_convert(expr);
                 let block = self.typecheck_statement(block, ret_type);
 
-                nodes::Statement::While(expr.clone(), Box::new(block.clone()), String::new())
+                nodes::Statement::While(expr.clone(), Box::new(block.clone()), label.clone())
             },
             nodes::Statement::DoWhile(block, expr, label) => {
                 let block = self.typecheck_statement(block, ret_type);
