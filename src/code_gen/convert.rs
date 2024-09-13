@@ -342,33 +342,12 @@ impl ConvertPass {
                     assembly::Operand::Register(assembly::Register::new("r2".to_string())),
                 ));
                 instructions.push(assembly::Instruction::Call(".mult".to_string(), false));
-                // if r1 is bigger than the address of val1, we need to swap them
-                instructions.push(assembly::Instruction::Cmp(
-                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
-                    val1.clone(),
-                ));
-                let false_label = self.generate_label("false".to_string());
-                let end_label = self.generate_label("end".to_string());
-                instructions.push(assembly::Instruction::JmpCC(
-                    assembly::CondCode::LessThan,
-                    false_label.clone(),
-                ));
                 instructions.push(assembly::Instruction::Binary(
-                    assembly::Binop::Subtract,
-                    assembly::Operand::Register(assembly::Register::new("r1".to_string())),
-                    val1.clone(),
-                    dst.clone(),
-                ));
-                instructions.push(assembly::Instruction::Jmp(end_label.clone()));
-                instructions.push(assembly::Instruction::Label(false_label));
-                instructions.push(assembly::Instruction::Binary(
-                    assembly::Binop::Subtract,
+                    assembly::Binop::Add,
                     val1,
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
-                    dst,
+                    dst
                 ));
-                instructions.push(assembly::Instruction::Label(end_label));
-
             },
         }
     }

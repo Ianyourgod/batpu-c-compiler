@@ -338,6 +338,7 @@ impl VariableResolution {
         match expr.expr {
             nodes::ExpressionEnum::Var(_) => true,
             nodes::ExpressionEnum::Dereference(_) => true,
+            nodes::ExpressionEnum::Subscript(_, _) => true,
             _ => false,
         }
     }

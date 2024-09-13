@@ -15,11 +15,11 @@ impl Emitter {
         }
     }
 
-    fn contains_main_function(&self) -> (bool, bool) {
+    fn has_function_named(&self, name: &str) -> (bool, bool) {
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
-                    if func.name == "main" {
+                    if func.name == name {
                         return (true, func.global);
                     }
                 },
@@ -29,8 +29,31 @@ impl Emitter {
         (false, false)
     }
 
+    fn uses_function_named(&self, name: &str) -> bool {
+        for tl in &self.program.statements {
+            match tl {
+                assembly::TopLevel::FuncDef(ref func) => {
+                    for instr in &func.body {
+                        match instr {
+                            assembly::Instruction::Call(ref lbl, _) => {
+                                if lbl == name {
+                                    return true;
+                                }
+                            },
+                            _ => {}
+                        }
+                    }
+                },
+                _ => {}
+            }
+        }
+        false
+    }
+
     pub fn emit(&self) -> String {
-        let (contains_main, main_global) = self.contains_main_function();
+        let (contains_main, main_global) = self.has_function_named("main");
+        let uses_mult = self.uses_function_named(".mult");
+        let uses_malloc = self.uses_function_named("malloc");
         let mut output = format!("
 ldi r14 239
 ldi r15 239
@@ -44,27 +67,46 @@ hlt
 .mem_write
   str r1 r2 0
   ret
-..mult
+{}
+{}
+", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" },
+if uses_mult {
+"..mult
   LDI r3 0
-  LDI r4 0
-  LDI r5 8
   ..MULT_LOOP
-    LSH r4 r4
-    LSH r3 r3
-    BRH NC ..MULT_NOCARRY
-    ADI r4 1
-      ..MULT_NOCARRY
-    LSH r2 r2
-    BRH NC ..MULT_NOADD
+    ADI r2 -1
+    BRH LT ..MULT_END
     ADD r1 r3 r3
-    BRH NC ..MULT_NOADD
-    ADI r4 1
-      ..MULT_NOADD
-    ADI r5 -1
-    BRH NZ ..MULT_LOOP
+  JMP ..MULT_LOOP
+  ..MULT_END
   MOV r3 r1
-  RET
-", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" });
+  RET" } else { "" },
+if uses_malloc {
+".malloc
+adi r1 1
+ldi r2 0
+.malloc.l1
+lod r2 r3
+cmp r3 r0
+brh eq .malloc.el1
+add r2 r3 r2
+jmp .malloc.l1
+.malloc.el1
+ldi r4 0
+.malloc.l2
+adi r4 1
+adi r2 1
+lod r2 r3
+cmp r1 r4
+brh eq .malloc.el2
+cmp r3 r0
+brh ne .malloc.l1
+jmp .malloc.l2
+.malloc.el2
+sub r2 r1 r1
+str r1 r4 0
+adi r1 1
+ret" } else { "" });
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
