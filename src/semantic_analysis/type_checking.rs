@@ -5,6 +5,7 @@ use crate::parser::nodes::{self, BlockItem};
 pub struct TypeChecker {
     program: nodes::Program,
     symbol_table: nodes::SymbolTable,
+    type_table: nodes::TypeTable,
 }
 
 impl TypeChecker {
@@ -12,21 +13,23 @@ impl TypeChecker {
         TypeChecker {
             program,
             symbol_table: nodes::SymbolTable::new(),
+            type_table: nodes::TypeTable::new(),
         }
     }
 
-    pub fn resolve(&mut self) -> (nodes::Program, nodes::SymbolTable) {
+    pub fn resolve(&mut self) -> (nodes::Program, nodes::SymbolTable, nodes::TypeTable) {
         let mut statements: Vec<nodes::Declaration> = Vec::with_capacity(self.program.statements.len());
         for decl in self.program.statements.clone() {
             statements.push(match decl {
                 nodes::Declaration::VarDecl(var_decl) => nodes::Declaration::VarDecl(self.typecheck_file_scope_variable_declaration(&var_decl)),
                 nodes::Declaration::FuncDecl(func) => self.typecheck_function_declaration(&func),
+                nodes::Declaration::StructDecl(struct_decl) => self.typecheck_struct_declaration(&struct_decl),
             });
         }
 
         (nodes::Program {
             statements,
-        }, self.symbol_table.clone())
+        }, self.symbol_table.clone(), self.type_table.clone())
     }
 
     fn typecheck_function_declaration(&mut self, decl: &nodes::FuncDecl) -> nodes::Declaration {
@@ -71,11 +74,15 @@ impl TypeChecker {
         };
 
         let body = if has_body {
+            if !self.is_complete_type(ret_type) {
+                panic!("Incomplete type in function return type");
+            }
+
             for (idx, param) in decl.params.iter().enumerate() {
                 let param_type = &param_types[idx];
 
-                if param_type == &nodes::Type::Void {
-                    panic!("Cannot declare variable of type void");
+                if !self.is_complete_type(param_type) {
+                    panic!("Incomplete type in function parameter");
                 }
         
                 self.validate_type_specifier(param_type);
@@ -121,6 +128,19 @@ impl TypeChecker {
 
                 nodes::Initializer::Compound(exprs)
             },
+            nodes::Type::Struct(tag) => {
+                if !self.type_table.contains(tag) {
+                    panic!("Unknown struct {:?}", tag);
+                }
+                let struct_def = self.type_table.lookup(tag).unwrap();
+
+                let mut exprs = Vec::with_capacity(struct_def.1.len());
+                for member in &struct_def.1 {
+                    exprs.push(self.zero_init(&member.ty));
+                }
+
+                nodes::Initializer::Compound(exprs)
+            },
             _ => panic!("Cannot zero init type {:?}", ty),
         }
     }
@@ -134,30 +154,57 @@ impl TypeChecker {
                 nodes::Initializer::Single(expr)
             },
             nodes::Initializer::Compound(exprs) => {
-                let mut new_exprs = Vec::with_capacity(exprs.len());
+                match ty {
+                    nodes::Type::Array(ty, size) => {
+                        let mut new_exprs = Vec::with_capacity(exprs.len());
 
-                let (ty, size) = match ty {
-                    nodes::Type::Array(ty, size) => (*ty.clone(), *size),
-                    _ => panic!("Expected Array, got {:?}", ty),
-                };
-                let mut count = 0;
-                for expr in exprs {
-                    new_exprs.push(self.typecheck_initializer(expr, &ty));
-                    count += 1;
+                        let (ty, size) = (*ty.clone(), *size);
+                        let mut count = 0;
+                        for expr in exprs {
+                            new_exprs.push(self.typecheck_initializer(expr, &ty));
+                            count += 1;
+                        }
+
+                        if count > size {
+                            panic!("Too many initializers");
+                        } else if count < size {
+                            for _ in count..size {
+                                new_exprs.push(nodes::Initializer::Single(nodes::Expression {
+                                    expr: nodes::ExpressionEnum::IntegerLiteral(0),
+                                    ty: ty.clone(),
+                                }));
+                            }
+                        }
+
+                        nodes::Initializer::Compound(new_exprs)
+                    },
+                    nodes::Type::Struct(tag) => {
+                        if !self.type_table.contains(tag) {
+                            panic!("Unknown struct {:?}", tag);
+                        }
+                        let struct_def = self.type_table.lookup(tag).unwrap();
+
+                        if exprs.len() > struct_def.1.len() {
+                            panic!("Too many initializers");
+                        }
+
+                        let mut i = 0;
+                        let mut typechecked_list = Vec::with_capacity(struct_def.1.len());
+                        for init_elem in exprs {
+                            let elem_ty = &struct_def.1[i].ty;
+                            let init_elem = self.typecheck_initializer(init_elem, elem_ty);
+                            typechecked_list.push(init_elem);
+                            i += 1;
+                        }
+                        while i < struct_def.1.len() {
+                            typechecked_list.push(self.zero_init(&struct_def.1[i].ty));
+                            i += 1;
+                        }
+
+                        nodes::Initializer::Compound(typechecked_list)
+                    },
+                    _ => panic!("Cannot initialize type {:?} with compound initializer", ty),
                 }
-
-                if count > size {
-                    panic!("Too many initializers");
-                } else if count < size {
-                    for _ in count..size {
-                        new_exprs.push(nodes::Initializer::Single(nodes::Expression {
-                            expr: nodes::ExpressionEnum::IntegerLiteral(0),
-                            ty: ty.clone(),
-                        }));
-                    }
-                }
-
-                nodes::Initializer::Compound(new_exprs)
             },
         }
     }
@@ -452,6 +499,7 @@ impl TypeChecker {
                     panic!("Invalid type for conditional");
                 }
 
+
                 
                 let common_type = if then.ty == nodes::Type::Void && els.ty == nodes::Type::Void {
                     nodes::Type::Void
@@ -460,7 +508,20 @@ impl TypeChecker {
                 } else if self.is_arithmetic_type(&then.ty) && self.is_arithmetic_type(&els.ty) {
                     self.get_common_type(&then.ty, &els.ty)
                 } else {
-                    panic!("Invalid types in conditional");
+                    let l_tag = match then.ty {
+                        nodes::Type::Struct(ref tag) => tag.clone(),
+                        _ => panic!("Invalid types in conditional"),
+                    };
+                    let r_tag = match els.ty {
+                        nodes::Type::Struct(ref tag) => tag.clone(),
+                        _ => panic!("Invalid types in conditional"),
+                    };
+
+                    if l_tag != r_tag {
+                        panic!("Incompatible types in conditional");
+                    }
+
+                    then.ty.clone()
                 };
 
                 let converted_left = then;
@@ -683,6 +744,52 @@ impl TypeChecker {
                     ty: nodes::Type::Int,
                 }
             },
+            nodes::ExpressionEnum::Dot(ref expr, ref field) => {
+                let expr = self.typecheck_and_convert(&*expr);
+
+                let ty = match expr.ty {
+                    nodes::Type::Struct(ref tag) => {
+                        if !self.type_table.contains(&tag) {
+                            panic!("Unknown struct {:?}", tag);
+                        }
+                        let struct_def = self.type_table.lookup(&tag).unwrap();
+                        // its a vec of MemberEntrys (String, Type, Offset). we want to find it by the string, and return the type
+                        let field_ty = struct_def.1.iter().find(|memb_entry| memb_entry.name == *field).unwrap().ty.clone();
+                        field_ty.clone()
+                    },
+                    _ => panic!("Expected Struct, got {:?}", expr.ty),
+                };
+
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::Dot(Box::new(expr), field.clone()),
+                    ty,
+                }
+            },
+            nodes::ExpressionEnum::Arrow(ref expr, ref field) => {
+                let expr = self.typecheck_and_convert(&*expr);
+
+                let ty = match expr.ty {
+                    nodes::Type::Pointer(ref ty) => {
+                        match &**ty {
+                            nodes::Type::Struct(tag) => {
+                                if !self.type_table.contains(&tag) {
+                                    panic!("Unknown struct {:?}", tag);
+                                }
+                                let struct_def = self.type_table.lookup(&tag).unwrap();
+                                let field_ty = struct_def.1.iter().find(|memb_entry| memb_entry.name == *field).unwrap().ty.clone();
+                                field_ty.clone()
+                            },
+                            _ => panic!("Expected Struct, got {:?}", ty),
+                        }
+                    },
+                    _ => panic!("Expected Ptr, got {:?}", expr.ty),
+                };
+
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::Arrow(Box::new(expr), field.clone()),
+                    ty,
+                }
+            },
             nodes::ExpressionEnum::CharLiteral(ch) => nodes::Expression {
                 expr: nodes::ExpressionEnum::CharLiteral(ch),
                 ty: nodes::Type::Char,
@@ -694,6 +801,9 @@ impl TypeChecker {
     fn is_complete_type(&self, ty: &nodes::Type) -> bool {
         match ty {
             nodes::Type::Void => false,
+            nodes::Type::Struct(tag) => {
+                self.symbol_table.contains(tag)
+            },
             _ => true,
         }
     }
@@ -736,6 +846,12 @@ impl TypeChecker {
                     ty: nodes::Type::Pointer(Box::new(*ty.clone())),
                 }
             },
+            nodes::Type::Struct(tag) => {
+                if !self.type_table.contains(tag) {
+                    panic!("Unknown struct {:?}", tag);
+                }
+                expr
+            },
             _ => expr,
         }
     }
@@ -745,6 +861,8 @@ impl TypeChecker {
             nodes::ExpressionEnum::Var(_) => true,
             nodes::ExpressionEnum::Dereference(_) => true,
             nodes::ExpressionEnum::Subscript(_, _) => true,
+            nodes::ExpressionEnum::Dot(_, _) => true,
+            nodes::ExpressionEnum::Arrow(_, _) => true,
             _ => false,
         }
     }
@@ -764,7 +882,8 @@ impl TypeChecker {
         match ty {
             nodes::Type::Array(_, _) |
             nodes::Type::Fn(_, _) |
-            nodes::Type::Void => false,
+            nodes::Type::Void |
+            nodes::Type::Struct(_) => false,
 
             nodes::Type::Pointer(_) |
             nodes::Type::Int |
@@ -806,7 +925,8 @@ impl TypeChecker {
             BlockItem::Declaration(decl) => {
                 BlockItem::Declaration(match decl {
                     nodes::Declaration::FuncDecl(fn_decl) => self.typecheck_function_declaration(fn_decl),
-                    nodes::Declaration::VarDecl(var_decl) => self.typecheck_variable_declaration(var_decl)
+                    nodes::Declaration::VarDecl(var_decl) => self.typecheck_variable_declaration(var_decl),
+                    nodes::Declaration::StructDecl(struct_decl) => self.typecheck_struct_declaration(struct_decl),
                 })
             },
             BlockItem::Statement(stmt) => BlockItem::Statement(self.typecheck_statement(stmt, ret_type)),
@@ -840,5 +960,54 @@ impl TypeChecker {
             storage_class: decl.storage_class.clone(),
             ty: decl.ty.clone(),
         })
+    }
+
+    fn typecheck_struct_declaration(&mut self, decl: &nodes::StructDecl) -> nodes::Declaration {
+        if decl.members.len() == 0 {
+            return nodes::Declaration::StructDecl(decl.clone());
+        }
+        self.validate_struct_declaration(decl);
+
+        let mut member_entries = Vec::new();
+        let mut struct_size = 0;
+
+        for member in &decl.members {
+            let member_type = member.ty.clone();
+            let member_size = self.get_size(&member_type);
+
+            let offset = struct_size;
+            struct_size += member_size;
+
+            member_entries.push(nodes::MemberEntry {
+                name: member.name.clone(),
+                ty: member_type,
+                offset,
+            });
+        }
+
+        let name = decl.tag.clone();
+
+        self.type_table.insert(name, (struct_size, member_entries));
+
+        nodes::Declaration::StructDecl(decl.clone())
+    }
+
+    fn get_size(&self, ty: &nodes::Type) -> i32 {
+        match ty {
+            nodes::Type::Int | nodes::Type::Pointer(_) |
+            nodes::Type::Char => 1,
+            nodes::Type::Array(ty, size) => self.get_size(ty) * *size as i32,
+            nodes::Type::Struct(decl) => {
+                self.type_table.lookup(decl).unwrap().0
+            },
+            nodes::Type::Fn(_, _) => panic!("Function types should not be used in this context"),
+            nodes::Type::Void => panic!("Void is weird"),
+        }
+    }
+
+    fn validate_struct_declaration(&self, decl: &nodes::StructDecl) {
+        for member in &decl.members {
+            self.validate_type_specifier(&member.ty);
+        }
     }
 }

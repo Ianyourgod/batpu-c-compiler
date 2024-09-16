@@ -34,6 +34,7 @@ pub enum Instruction {
     Load(Val, Val),
     Store(Val, Val),
     CopyToOffset(Val, Val, i16), // val, var, offset
+    CopyFromOffset(Val, i16, Val), // var, offset, val
     AddPtr(Val, Val, Val, Val), // val, val, offset, dest
 }
 
@@ -42,6 +43,7 @@ pub enum Val {
     Const(i8),
     Var(String, Type),
     DereferencedPtr(Box<Val>),
+    SubObject((String, Type), i16), // identifier, offset
 }
 
 #[derive(Debug, Clone)]

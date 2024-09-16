@@ -6,14 +6,16 @@ pub struct Tacky {
     program: nodes::Program,
     temp_count: i32,
     symbol_table: nodes::SymbolTable,
+    type_table: nodes::TypeTable,
 }
 
 impl Tacky {
-    pub fn new(program: nodes::Program, symbol_table: nodes::SymbolTable) -> Tacky {
+    pub fn new(program: nodes::Program, symbol_table: nodes::SymbolTable, type_table: nodes::TypeTable) -> Tacky {
         Tacky {
             program,
             temp_count: 0,
             symbol_table,
+            type_table,
         }
     }
 
@@ -77,6 +79,7 @@ impl Tacky {
 
                     statements.push(definition::TopLevel::FuncDef(func));
                 }
+                nodes::Declaration::StructDecl(_) => (),
             }
         }
 
@@ -118,13 +121,21 @@ impl Tacky {
                 }
             }
             nodes::Initializer::Compound(ref inits) => {
-                let inner_type = match ty {
-                    definition::Type::Array(ty, _) => ty,
-                    _ => panic!("Expected array type, got {:?}", ty),
-                };
-                for init in inits {
-                    self.handle_initializer(init, body, name.clone(), ty, offset, false);
-                    offset += inner_type.size() as i8;
+                match ty {
+                    definition::Type::Array(inner_ty, _) => {
+                        for init in inits {
+                            self.handle_initializer(init, body, name.clone(), ty, offset, false);
+                            offset += inner_ty.size() as i8;
+                        }
+                    }
+                    definition::Type::Struct(tag) => {
+                        let members = self.type_table.lookup(tag).unwrap().1.clone();
+                        for (member, init) in members.iter().zip(inits) {
+                            let member_offset = member.offset as i8;
+                            self.handle_initializer(init, body, name.clone(), &member.ty, offset + member_offset, false);
+                        }
+                    }
+                    _ => panic!("Invalid compound initializer"),
                 }
             }
         }
@@ -322,6 +333,10 @@ impl Tacky {
                         body.push(definition::Instruction::Store(rval.clone(), *ptr.clone()));
                         return rval;
                     }
+                    definition::Val::SubObject((var, ty), offset) => {
+                        body.push(definition::Instruction::CopyToOffset(rval.clone(), definition::Val::Var(var, ty), offset));
+                        return rval;
+                    }
                     _ => {
                         body.push(definition::Instruction::Copy(lval.clone(), rval.clone()));
                         return lval;
@@ -408,14 +423,19 @@ impl Tacky {
                 definition::Val::DereferencedPtr(Box::new(res))
             }
             nodes::ExpressionEnum::AddressOf(ref expr) => {
-                match expr.expr {
-                    nodes::ExpressionEnum::Dereference(ref expr) => {
-                        self.emit_tacky_and_convert(&expr.expr, body, ty)
-                    }
+                let src = self.emit_expression(&expr.expr, body, &expr.ty);
+                match src {
+                    definition::Val::DereferencedPtr(ptr) => *ptr,
+                    definition::Val::SubObject(var, offset) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::GetAddress(definition::Val::Var(var.0, var.1), dest.clone()));
+                        body.push(definition::Instruction::AddPtr(dest.clone(), definition::Val::Const(offset as i8), definition::Val::Const(1), dest.clone()));
+                        dest
+                    },
                     _ => {
                         let dest_name = self.make_temporary();
                         let dest = definition::Val::Var(dest_name.clone(), ty.clone());
-                        let src = self.emit_tacky_and_convert(&expr.expr, body, ty);
                         body.push(definition::Instruction::GetAddress(src, dest.clone()));
                         dest
                     }
@@ -449,6 +469,50 @@ impl Tacky {
             nodes::ExpressionEnum::SizeOfType(ty) => {
                 definition::Val::Const(ty.size() as i8)
             }
+            nodes::ExpressionEnum::Dot(ref expr, ref member) => {
+                let struct_tag = match &expr.ty {
+                    nodes::Type::Struct(tag) => tag,
+                    _ => panic!("Expected struct type, got {:?}", expr.ty),
+                };
+                let member_entry = self.type_table.lookup_member_entry(struct_tag, member).unwrap();
+                let member_offset = member_entry.offset as i16;
+
+                let expr = self.emit_expression(&expr.expr, body, &expr.ty);
+                
+                match expr {
+                    definition::Val::SubObject(ident, offset) => definition::Val::SubObject(ident, offset + member_offset),
+                    definition::Val::DereferencedPtr(ptr) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        
+                        body.push(definition::Instruction::AddPtr(*ptr, definition::Val::Const(member_offset as i8), definition::Val::Const(1), dest.clone()));
+
+                        definition::Val::DereferencedPtr(Box::new(dest))
+                    }
+                    definition::Val::Var(ident, ty) => definition::Val::SubObject((ident, ty), member_offset as i16),
+                    definition::Val::Const(_) => panic!("Cannot access member of constant"),
+                }
+            },
+            nodes::ExpressionEnum::Arrow(ref expr, ref member) => {
+                let struct_tag = match &expr.ty {
+                    nodes::Type::Pointer(inner) => match inner.as_ref() {
+                        nodes::Type::Struct(tag) => tag,
+                        _ => panic!("Expected struct type, got {:?}", inner),
+                    },
+                    _ => panic!("Expected struct type, got {:?}", expr.ty),
+                };
+                let member_entry = self.type_table.lookup_member_entry(&struct_tag, member).unwrap();
+                let member_offset = member_entry.offset as i16;
+
+                let expr = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
+                
+                // expr is a pointer. We need to add the offset to the pointer, then dereference it
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+
+                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i8), definition::Val::Const(1), dest.clone()));
+                definition::Val::DereferencedPtr(Box::new(dest))
+            },
         }
     }
 
@@ -480,6 +544,12 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                 body.push(definition::Instruction::Load(*ptr, dest.clone()));
+                dest
+            },
+            definition::Val::SubObject(var, offset) => {
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                body.push(definition::Instruction::CopyFromOffset(definition::Val::Var(var.0, var.1), offset, dest.clone()));
                 dest
             }
             _ => val,

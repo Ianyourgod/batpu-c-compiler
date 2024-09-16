@@ -6,7 +6,7 @@ mod type_checking;
 
 use crate::parser::nodes;
 
-pub fn resolve(program: nodes::Program) -> (nodes::Program, nodes::SymbolTable) {
+pub fn resolve(program: nodes::Program) -> (nodes::Program, nodes::SymbolTable, nodes::TypeTable) {
     let mut var_resolver = variable_resolution::VariableResolution::new(program);
     let program = var_resolver.resolve();
 

@@ -50,6 +50,10 @@ pub enum TokenType {
     GreaterThan,
     LessThanEqual,
     GreaterThanEqual,
+
+    Period,
+    Arrow,
+
     // Literals
     Identifier(String),
     IntegerLiteral(i8),
@@ -117,7 +121,8 @@ impl Lexer {
             '-' => after_char!(self, self.peek_char(),
                 TokenType::Minus,
                 ('=', TokenType::SubAssign),
-                ('-', TokenType::Decrement)
+                ('-', TokenType::Decrement),
+                ('>', TokenType::Arrow)
             ),
             '*' => TokenType::Star,
             '/' => TokenType::Slash,
@@ -158,6 +163,7 @@ impl Lexer {
             },
             '?' => TokenType::QuestionMark,
             ':' => TokenType::Colon,
+            '.' => TokenType::Period,
             '\0' => TokenType::EOF,
             _ => {
                 if is_letter(self.ch) {
@@ -166,6 +172,7 @@ impl Lexer {
                     let keywords = [
                         "int", "void", "char",
                         "static", "extern",
+                        "struct",
                         "return",
                         "if", "else",
                         "while", "for", "do", "break", "continue",

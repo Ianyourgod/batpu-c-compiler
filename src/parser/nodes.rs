@@ -39,6 +39,19 @@ pub enum ForInit {
 pub enum Declaration {
     VarDecl(VarDecl),
     FuncDecl(FuncDecl),
+    StructDecl(StructDecl),
+}
+
+#[derive(Debug, Clone)]
+pub struct StructDecl {
+    pub tag: String,
+    pub members: Vec<MemberDecl>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MemberDecl {
+    pub name: String,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +107,8 @@ pub enum ExpressionEnum {
     Cast(Type, Box<Expression>),
     SizeOf(Box<Expression>),
     SizeOfType(Type),
+    Dot(Box<Expression>, String),
+    Arrow(Box<Expression>, String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -163,6 +178,7 @@ pub enum Type {
     Fn(Vec<Type>, Box<Type>),
     Pointer(Box<Type>),
     Array(Box<Type>, i16),
+    Struct(String),
 
     Void,
 }
@@ -173,6 +189,7 @@ impl Type {
             Type::Int | Type::Pointer(_) | Type::Char => 1,
             Type::Fn(_, _) => panic!("Function types should not be used in this context"),
             Type::Array(ty, size) => ty.size() * size,
+            Type::Struct(_) => panic!("Struct types should not be used in this context"),
 
             Type::Void => 1, // void is weird
         }
@@ -184,4 +201,43 @@ pub enum StorageClass {
     Static,
     Extern,
     Auto,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeTable {
+    symbols: HashMap<String, (i32, Vec<MemberEntry>)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MemberEntry {
+    pub name: String,
+    pub ty: Type,
+    pub offset: i32,
+}
+
+impl TypeTable {
+    pub fn new() -> Self {
+        TypeTable {
+            symbols: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, id: String, ty: (i32, Vec<MemberEntry>)) {
+        self.symbols.insert(id, ty);
+    }
+
+    pub fn lookup(&self, id: &String) -> Option<&(i32, Vec<MemberEntry>)> {
+        self.symbols.get(id)
+    }
+
+    pub fn lookup_member_entry(&self, id: &String, member: &String) -> Option<&MemberEntry> {
+        match self.symbols.get(id) {
+            Some((_, members)) => members.iter().find(|m| m.name == *member),
+            None => None,
+        }
+    }
+
+    pub fn contains(&self, id: &String) -> bool {
+        self.symbols.contains_key(id)
+    }
 }

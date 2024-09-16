@@ -18,7 +18,8 @@ impl LoopLabeling {
 
         for decl in self.program.statements.clone() {
             let func = match decl {
-                nodes::Declaration::VarDecl(_) => { statements.push(decl); continue },
+                nodes::Declaration::VarDecl(_) |
+                nodes::Declaration::StructDecl(_) => { statements.push(decl); continue },
                 nodes::Declaration::FuncDecl(fn_decl) => fn_decl
             };
 

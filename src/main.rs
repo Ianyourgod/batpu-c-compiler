@@ -118,11 +118,11 @@ fn compile(input: String) -> String {
     let program = parser.parse_program();
     
     #[allow(unused_variables)]
-    let (program, symbol_table) = semantic_analysis::resolve(program);
+    let (program, symbol_table, type_table) = semantic_analysis::resolve(program);
 
     //println!("{:#?}", program);
 
-    let mut tacky = tacky::Tacky::new(program, symbol_table.clone());
+    let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table);
     let program = tacky.emit();
 
     //println!("{:#?}", program);

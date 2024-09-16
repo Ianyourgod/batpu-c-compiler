@@ -327,6 +327,16 @@ impl ConvertPass {
                     assembly::Operand::PseudoMem(name, *offset, ty)
                 ));
             },
+            definition::Instruction::CopyFromOffset(ref var, ref offset, ref dst) => {
+                let (name, ty) = match var {
+                    definition::Val::Var(name, ty) => (name.clone(), ty.clone()),
+                    _ => unreachable!(),
+                };
+                instructions.push(assembly::Instruction::Mov(
+                    assembly::Operand::PseudoMem(name, *offset, ty),
+                    self.convert_val(dst)
+                ));
+            },
             definition::Instruction::AddPtr(ref val1, ref val2, ref offset, ref dst) => {
                 // mult val2 and offset by calling "__mult"
                 let val1 = self.convert_val(val1);
@@ -365,7 +375,8 @@ impl ConvertPass {
                     }
                 }
             },
-            definition::Val::DereferencedPtr(_) => panic!("Dereferenced pointers are not supported"),
+            definition::Val::DereferencedPtr(_) => panic!("Dereferenced pointers should have been removed"),
+            definition::Val::SubObject(_, _) => panic!("Subobjects should have been removed"),
         }
     }
 
