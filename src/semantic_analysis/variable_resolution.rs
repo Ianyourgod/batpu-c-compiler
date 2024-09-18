@@ -406,6 +406,8 @@ impl VariableResolution {
             nodes::ExpressionEnum::Var(_) => true,
             nodes::ExpressionEnum::Dereference(_) => true,
             nodes::ExpressionEnum::Subscript(_, _) => true,
+            nodes::ExpressionEnum::Dot(_, _) |
+            nodes::ExpressionEnum::Arrow(_, _) => true,
             _ => false,
         }
     }

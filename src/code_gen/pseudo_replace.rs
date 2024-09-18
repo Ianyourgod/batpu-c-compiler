@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use crate::parser::nodes::{self, SymbolTable};
+use crate::parser::nodes::{self, SymbolTable, TypeTable};
 use crate::code_gen::assembly;
 
 pub struct PseudoReplacePass {
     program: assembly::Program,
     symbol_table: HashMap<String, i16>,
     type_table: SymbolTable,
+    struct_table: TypeTable,
 }
 
 struct Context {
@@ -14,11 +15,12 @@ struct Context {
 }
 
 impl PseudoReplacePass {
-    pub fn new(program: assembly::Program, type_table: SymbolTable) -> PseudoReplacePass {
+    pub fn new(program: assembly::Program, type_table: SymbolTable, struct_table: TypeTable) -> PseudoReplacePass {
         PseudoReplacePass {
             program,
             symbol_table: HashMap::new(),
-            type_table: type_table,
+            type_table,
+            struct_table,
         }
     }
 
@@ -128,6 +130,7 @@ impl PseudoReplacePass {
         }
     }
 
+    #[allow(unused_variables)]
     fn emit_operand(&mut self, operand: &assembly::Operand, context: &mut Context, instructions: &mut Vec<assembly::Instruction>) -> assembly::Operand {
         match operand {
             assembly::Operand::Pseudo(ref ident, ref ty) => {
@@ -137,7 +140,7 @@ impl PseudoReplacePass {
                 }
 
                 if self.symbol_table.contains_key(ident) {
-                    instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, *self.symbol_table.get(ident).unwrap())));
+                    //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, *self.symbol_table.get(ident).unwrap())));
 
                     return assembly::Operand::Memory(
                         assembly::Register { name: "r15".to_string() },
@@ -147,9 +150,9 @@ impl PseudoReplacePass {
 
                 let so = context.stack_offset;
 
-                context.stack_offset += ty.size();
+                context.stack_offset += self.struct_table.type_size(ty) as i16;
 
-                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
+                //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
 
                 self.symbol_table.insert(ident.clone(), so + 1);
                 assembly::Operand::Memory(
@@ -164,7 +167,7 @@ impl PseudoReplacePass {
                 }
 
                 if self.symbol_table.contains_key(name) {
-                    instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, *self.symbol_table.get(name).unwrap())));
+                    //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, *self.symbol_table.get(name).unwrap())));
 
                     return assembly::Operand::Memory(
                         assembly::Register { name: "r15".to_string() },
@@ -174,9 +177,9 @@ impl PseudoReplacePass {
 
                 let so = context.stack_offset;
 
-                context.stack_offset += ty.size();
+                context.stack_offset += self.struct_table.type_size(ty) as i16;
 
-                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
+                //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
 
                 self.symbol_table.insert(name.clone(), so + 1);
                 assembly::Operand::Memory(

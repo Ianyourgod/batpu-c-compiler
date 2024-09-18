@@ -50,23 +50,27 @@ impl Emitter {
         false
     }
 
-    pub fn emit(&self) -> String {
+    pub fn emit(&self, include_comments: bool) -> String {
         let (contains_main, main_global) = self.has_function_named("main");
         let uses_mult = self.uses_function_named("__mult");
         let uses_malloc = self.uses_function_named("malloc");
+        let uses_free = self.uses_function_named("free");
         let mut output = format!("
 ldi r14 239
 ldi r15 239
 {}{}
-ldi r2 250
-str r2 r1 0
-hlt
+cal .exit
 .mem_read
   lod r1 r1 0
   ret
 .mem_write
   str r1 r2 0
   ret
+.exit
+  ldi r2 250
+  str r2 r1 0
+  hlt
+{}
 {}
 {}
 ", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" },
@@ -106,7 +110,19 @@ jmp .malloc.l2
 sub r2 r1 r1
 str r1 r4 0
 adi r1 1
-ret" } else { "" });
+ret" } else { "" },
+if uses_free {
+".free
+lod r1 r2 -1
+.free.loop1
+str r1 r0 -1
+adi r1 1
+adi r2 -1
+cmp r2 r0
+brh ne .free.loop1
+ret
+"
+} else { "" });
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
@@ -115,7 +131,7 @@ ret" } else { "" });
                     }
                     output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
                     for instr in &func.body {
-                        output.push_str(&format!("    {}\n", self.emit_instruction(instr)));
+                        output.push_str(&format!("    {}\n", self.emit_instruction(instr, include_comments)));
                     }
                     output.push_str("    ret\n");
                 },
@@ -180,7 +196,7 @@ ret" } else { "" });
         }.to_string()
     }
 
-    fn emit_instruction(&self, instr: &assembly::Instruction) -> String {
+    fn emit_instruction(&self, instr: &assembly::Instruction, include_comments: bool) -> String {
         match instr {
             assembly::Instruction::Mov(ref src, ref dst) => {
                 format!("mov {} {}", self.emit_operand(src), self.emit_operand(dst))
@@ -255,7 +271,8 @@ ret" } else { "" });
             }
 
             assembly::Instruction::Comment(ref s) => {
-                format!("// {}", s)
+                if include_comments { format!("// {}", s) }
+                else { String::new() }
             }
 
             assembly::Instruction::Lea(_, _) => unreachable!(),

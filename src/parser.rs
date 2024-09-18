@@ -26,6 +26,10 @@ enum AbstractDeclarator {
 impl Parser {
     pub fn new(mut lexer: Lexer) -> Parser {
         let current_token = lexer.next_token();
+        if let TokenType::Illegal(err) = current_token {
+            panic!("Illegal Token: {}", err);
+        }
+        
         Parser {
             lexer,
             current_token,
@@ -34,8 +38,8 @@ impl Parser {
 
     fn next_token(&mut self) {
         self.current_token = self.lexer.next_token();
-        if self.current_token == TokenType::Illegal {
-            panic!("Illegal Token");
+        if let TokenType::Illegal(ref err) = self.current_token {
+            panic!("Illegal Token: {}", err);
         }
     }
 
@@ -158,7 +162,7 @@ impl Parser {
 
         if self.current_token == TokenType::LParen {
             self.next_token();
-            if self.current_token == TokenType::Keyword("void".to_string()) {
+            if self.current_token == TokenType::Keyword("void".to_string()) && self.lexer.peek_token() == TokenType::RParen {
                 self.next_token();
                 self.consume(TokenType::RParen);
                 return Declarator::Function(Vec::new(), Box::new(inner));
@@ -222,6 +226,8 @@ impl Parser {
 
     fn parse_types(&mut self) -> Vec<TokenType> {
         let mut types: Vec<TokenType> = Vec::new();
+
+        //println!("{:?}", self.current_token);
 
         while self.is_valid_var_starter(&self.current_token) {
             if self.current_token == TokenType::Keyword("struct".to_string()) {
@@ -305,6 +311,7 @@ impl Parser {
     fn parse_declaration(&mut self) -> nodes::Declaration {
         let types = self.parse_types();
 
+        //println!("types: {:?}", types);
 
         if types[0] == TokenType::Keyword("struct".to_string()) {
             let (tag, t1_is_ident) = match types.get(1) {
@@ -327,6 +334,7 @@ impl Parser {
         match type_ {
             nodes::Type::Fn(_, _) => {
                 if self.current_token == TokenType::Semicolon {
+                    self.next_token();
                     return nodes::Declaration::FuncDecl(nodes::FuncDecl {
                         name,
                         params: args,

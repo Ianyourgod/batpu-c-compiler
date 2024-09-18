@@ -13,6 +13,7 @@ pub struct Settings {
     pub output_name: String,
     pub do_not_link: bool,
     pub do_not_assemble: bool,
+    pub include_comments: bool,
 }
 
 fn parse_args() -> Settings {
@@ -24,6 +25,7 @@ fn parse_args() -> Settings {
     let mut output_name = "output.mc".to_string();
     let mut do_not_link = false;
     let mut do_not_assemble = false;
+    let mut include_comments = false;
 
     args.nth(0);
     while 1 <= args.len() {
@@ -42,6 +44,9 @@ fn parse_args() -> Settings {
             "-n" => {
                 do_not_assemble = true;
             },
+            "-f" => {
+                include_comments = true;
+            },
             _ => {
                 input_names.push(arg);
             },
@@ -58,6 +63,7 @@ fn parse_args() -> Settings {
         input_names,
         do_not_link,
         do_not_assemble,
+        include_comments,
     }
 }
 
@@ -112,7 +118,28 @@ fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String,
     }
 }
 
-fn compile(input: String) -> String {
+fn compile(input_file: &String, include_comments: bool) -> String {
+    // preprocess input
+    // call "gcc -E -P input_file -o .tmpbc/input_file.i"
+    let mut binding = std::process::Command::new("gcc");
+    let out = binding
+        .arg("-E")
+        .arg("-P")
+        .arg(input_file)
+        .arg("-o")
+        .arg(format!(".tmpcb/{}.i", input_file))
+        .output()
+        .expect("Failed to execute command");
+
+    // check if it errored
+    if !out.status.success() {
+        println!("PREPROCESSOR ERROR: {}", String::from_utf8(out.stderr).unwrap());
+        exit(1);
+    }
+
+    // read preprocessed file
+    let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_file)).expect("Failed to read file");
+
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
@@ -122,17 +149,17 @@ fn compile(input: String) -> String {
 
     //println!("{:#?}", program);
 
-    let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table);
+    let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
     let program = tacky.emit();
 
     //println!("{:#?}", program);
 
-    let assembly = code_gen::convert(program, symbol_table);
+    let assembly = code_gen::convert(program, symbol_table, type_table);
 
     //println!("{:#?}", assembly);
 
     let emitter = emitter::Emitter::new(assembly);
-    let output = emitter.emit();
+    let output = emitter.emit(include_comments);
     output
 }
 
@@ -142,9 +169,7 @@ fn main() {
 
     let mut outputs = Vec::new();
     for input_name in args.input_names {
-        let input = std::fs::read_to_string(input_name).expect("Failed to read file");
-
-        let output = compile(input);
+        let output = compile(&input_name, args.include_comments);
 
         outputs.push(output);
     }

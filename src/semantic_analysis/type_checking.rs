@@ -74,10 +74,6 @@ impl TypeChecker {
         };
 
         let body = if has_body {
-            if !self.is_complete_type(ret_type) {
-                panic!("Incomplete type in function return type");
-            }
-
             for (idx, param) in decl.params.iter().enumerate() {
                 let param_type = &param_types[idx];
 
@@ -419,7 +415,7 @@ impl TypeChecker {
            (self.is_void_ptr(ty) && self.is_pointer_type(&expr.ty)) {
             return self.convert_to(expr.clone(), ty);
         } else {
-            panic!("Incompatible types in assignment, expected {:?}, got {:?}", ty, expr.ty);
+            panic!("Incompatible types in cba assignment, expected {:?}, got {:?}", ty, expr.ty);
         }
     }
 
@@ -618,8 +614,10 @@ impl TypeChecker {
                             self.get_common_pointer_type(&left, &right)
                         } else if self.is_arithmetic_type(&left.ty) && self.is_arithmetic_type(&right.ty) {
                             self.get_common_type(&left.ty, &right.ty)
+                        } else if left.ty == right.ty {
+                            left.ty.clone()
                         } else {
-                            panic!("Invalid types in comparison");
+                            panic!("Invalid types in comparison ({:?} and {:?})", left.ty, right.ty);
                         };
 
                         let converted_left = left;
@@ -727,7 +725,7 @@ impl TypeChecker {
             nodes::ExpressionEnum::SizeOfType(ref ty) => {
                 self.validate_type_specifier(ty);
                 if !self.is_complete_type(ty) {
-                    panic!("Incomplete type in sizeof");
+                    panic!("Incomplete type in sizeof, {:?}", ty);
                 }
                 nodes::Expression {
                     expr: nodes::ExpressionEnum::SizeOfType(ty.clone()),
@@ -802,7 +800,7 @@ impl TypeChecker {
         match ty {
             nodes::Type::Void => false,
             nodes::Type::Struct(tag) => {
-                self.symbol_table.contains(tag)
+                self.type_table.contains(tag)
             },
             _ => true,
         }
@@ -986,7 +984,6 @@ impl TypeChecker {
         }
 
         let name = decl.tag.clone();
-
         self.type_table.insert(name, (struct_size, member_entries));
 
         nodes::Declaration::StructDecl(decl.clone())

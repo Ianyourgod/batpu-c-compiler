@@ -187,9 +187,10 @@ impl Type {
     pub fn size(&self) -> i16 {
         match self {
             Type::Int | Type::Pointer(_) | Type::Char => 1,
-            Type::Fn(_, _) => panic!("Function types should not be used in this context"),
             Type::Array(ty, size) => ty.size() * size,
-            Type::Struct(_) => panic!("Struct types should not be used in this context"),
+            Type::Struct(_) => panic!("Struct types' size cannot be found through this method"),
+
+            Type::Fn(_, _) => panic!("Function types should not be used in this context"),
 
             Type::Void => 1, // void is weird
         }
@@ -234,6 +235,16 @@ impl TypeTable {
         match self.symbols.get(id) {
             Some((_, members)) => members.iter().find(|m| m.name == *member),
             None => None,
+        }
+    }
+
+    pub fn type_size(&self, ty: &Type) -> i32 {
+        match ty {
+            Type::Struct(id) => {
+                let (size, _) = self.symbols.get(id).unwrap();
+                *size
+            },
+            _ => ty.size() as i32,
         }
     }
 

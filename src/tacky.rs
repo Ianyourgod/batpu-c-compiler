@@ -174,10 +174,10 @@ impl Tacky {
                 }
             }
             nodes::Statement::Break(label) => {
-                body.push(definition::Instruction::Label(format!("{}.break", label)))
+                body.push(definition::Instruction::Jump(format!("{}.break", label)))
             }
             nodes::Statement::Continue(label) => {
-                body.push(definition::Instruction::Label(format!("{}.continue", label)))
+                body.push(definition::Instruction::Jump(format!("{}.continue", label)))
             }
             nodes::Statement::While(cond, loop_body, label) => {
                 let continue_label = format!("{}.continue", label);
@@ -369,28 +369,18 @@ impl Tacky {
                 }
             }
             nodes::ExpressionEnum::Increment(ref expr) => {
-                let expr = match expr.expr {
-                    nodes::ExpressionEnum::Var(ref s) => {
-                        s.clone()
-                    }
-                    _ => panic!("Invalid increment target"),
-                };
+                let lval = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
 
-                let src = definition::Val::Var(expr.clone(), ty.clone());
-                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), src.clone()));
-                src
+                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), lval.clone()));
+
+                lval
             }
             nodes::ExpressionEnum::Decrement(ref expr) => {
-                let expr = match expr.expr {
-                    nodes::ExpressionEnum::Var(ref s) => {
-                        s.clone()
-                    }
-                    _ => panic!("Invalid increment target"),
-                };
+                let lval = self.emit_expression(&expr.expr, body, &expr.ty);
 
-                let src = definition::Val::Var(expr.clone(), ty.clone());
-                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), src.clone()));
-                src
+                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), lval.clone()));
+
+                lval
             }
             nodes::ExpressionEnum::FunctionCall(ref ident, ref args) => {
                 let mut arg_vals = Vec::new();
@@ -467,7 +457,10 @@ impl Tacky {
                 definition::Val::Const(expr.ty.size() as i8)
             }
             nodes::ExpressionEnum::SizeOfType(ty) => {
-                definition::Val::Const(ty.size() as i8)
+                definition::Val::Const(match ty {
+                    nodes::Type::Struct(tag) => self.type_table.lookup(tag).unwrap().0 as i8,
+                    _ => ty.size() as i8,
+                })
             }
             nodes::ExpressionEnum::Dot(ref expr, ref member) => {
                 let struct_tag = match &expr.ty {
@@ -533,6 +526,7 @@ impl Tacky {
             '.' => 27,
             '!' => 28,
             '?' => 29,
+            '\0' => 30,
             _ => panic!("Invalid character: {:?}", ch),
         }
     }

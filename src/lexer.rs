@@ -61,7 +61,7 @@ pub enum TokenType {
     // End of file
     EOF,
     // Error
-    Illegal,
+    Illegal(String),
 }
 
 pub struct Lexer {
@@ -140,7 +140,7 @@ impl Lexer {
                 ('&', TokenType::LogicalAnd)
             ),
             '|' => after_char!(self, self.peek_char(),
-                TokenType::Illegal,
+                TokenType::Illegal("Invalid char after '|'".to_string()),
                 ('|', TokenType::LogicalOr)
             ),
             '<' => after_char!(self, self.peek_char(),
@@ -153,12 +153,22 @@ impl Lexer {
             ),
             '\'' => {
                 self.read_char();
-                let ch = self.ch;
+                let ch = if self.ch == '\\' {
+                    self.read_char();
+                    match self.ch {
+                        '0' => '\0',
+                        'n' => '\n',
+                        '\\' => '\\',
+                        _ => panic!("invalid char after \\")
+                    }
+                } else {
+                    self.ch
+                };
                 self.read_char();
                 if self.ch == '\'' {
                     TokenType::CharLiteral(ch)
                 } else {
-                    TokenType::Illegal
+                    TokenType::Illegal(format!("invalid char literal (expected ' found {:?}", self.ch))
                 }
             },
             '?' => TokenType::QuestionMark,
@@ -186,7 +196,7 @@ impl Lexer {
                 } else if is_digit(self.ch) {
                     return TokenType::IntegerLiteral(self.read_number());
                 } else {
-                    TokenType::EOF
+                    TokenType::Illegal(format!("invalid char {:?}", self.ch))
                 }
             }
         };
@@ -207,28 +217,6 @@ impl Lexer {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.ch.is_whitespace() {
-            self.read_char();
-        }
-        while self.ch == '/' && (self.peek_char() == '/' || self.peek_char() == '*') {
-            if self.peek_char() == '*' {
-                self.read_char();
-                self.read_char();
-                while self.ch != '*' && self.peek_char() != '/' {
-                    self.read_char();
-                }
-                self.read_char();
-                self.read_char();
-            } else {
-                while self.ch != '\n' {
-                    self.read_char();
-                }
-                self.read_char();
-            }
-            while self.ch.is_whitespace() {
-                self.read_char();
-            }
-        }
         while self.ch.is_whitespace() {
             self.read_char();
         }
