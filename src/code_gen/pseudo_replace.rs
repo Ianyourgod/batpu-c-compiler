@@ -140,7 +140,7 @@ impl PseudoReplacePass {
                 }
 
                 if self.symbol_table.contains_key(ident) {
-                    //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, *self.symbol_table.get(ident).unwrap())));
+                    instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, *self.symbol_table.get(ident).unwrap())));
 
                     return assembly::Operand::Memory(
                         assembly::Register { name: "r15".to_string() },
@@ -152,7 +152,7 @@ impl PseudoReplacePass {
 
                 context.stack_offset += self.struct_table.type_size(ty) as i16;
 
-                //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
+                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
 
                 self.symbol_table.insert(ident.clone(), so + 1);
                 assembly::Operand::Memory(
@@ -167,7 +167,7 @@ impl PseudoReplacePass {
                 }
 
                 if self.symbol_table.contains_key(name) {
-                    //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, *self.symbol_table.get(name).unwrap())));
+                    instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, *self.symbol_table.get(name).unwrap())));
 
                     return assembly::Operand::Memory(
                         assembly::Register { name: "r15".to_string() },
@@ -179,7 +179,7 @@ impl PseudoReplacePass {
 
                 context.stack_offset += self.struct_table.type_size(ty) as i16;
 
-                //instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
+                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
 
                 self.symbol_table.insert(name.clone(), so + 1);
                 assembly::Operand::Memory(

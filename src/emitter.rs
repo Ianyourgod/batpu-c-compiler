@@ -131,9 +131,9 @@ ret
                     }
                     output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
                     for instr in &func.body {
-                        output.push_str(&format!("    {}\n", self.emit_instruction(instr, include_comments)));
+                        if let assembly::Instruction::Comment(_) = instr { if !include_comments { continue; } }
+                        output.push_str(&format!("    {}\n", self.emit_instruction(instr)));
                     }
-                    output.push_str("    ret\n");
                 },
                 #[allow(unused_variables)]
                 assembly::TopLevel::StaticVariable(ref name, global, init) => {
@@ -196,7 +196,7 @@ ret
         }.to_string()
     }
 
-    fn emit_instruction(&self, instr: &assembly::Instruction, include_comments: bool) -> String {
+    fn emit_instruction(&self, instr: &assembly::Instruction) -> String {
         match instr {
             assembly::Instruction::Mov(ref src, ref dst) => {
                 format!("mov {} {}", self.emit_operand(src), self.emit_operand(dst))
@@ -271,8 +271,7 @@ ret
             }
 
             assembly::Instruction::Comment(ref s) => {
-                if include_comments { format!("// {}", s) }
-                else { String::new() }
+                format!("// {}", s)
             }
 
             assembly::Instruction::Lea(_, _) => unreachable!(),

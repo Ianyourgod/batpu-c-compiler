@@ -344,7 +344,7 @@ impl InstructionFixupPass {
                 } else {
                     panic!("Invalid destination operand: {:?}", dst);
                 }
-            }
+            },
             assembly::Instruction::Ldi(_, _) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Jmp(_) |

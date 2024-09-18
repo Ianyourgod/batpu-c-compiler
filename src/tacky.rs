@@ -63,6 +63,8 @@ impl Tacky {
                         self.emit_block_item(instr, &mut body);
                     }
 
+                    body.push(definition::Instruction::Return(None));
+
                     let table_entry = self.symbol_table.lookup(&func.name).unwrap();
 
                     let global = match table_entry.1 {
@@ -132,7 +134,7 @@ impl Tacky {
                         let members = self.type_table.lookup(tag).unwrap().1.clone();
                         for (member, init) in members.iter().zip(inits) {
                             let member_offset = member.offset as i8;
-                            self.handle_initializer(init, body, name.clone(), &member.ty, offset + member_offset, false);
+                            self.handle_initializer(init, body, name.clone(), ty, offset + member_offset, false);
                         }
                     }
                     _ => panic!("Invalid compound initializer"),
