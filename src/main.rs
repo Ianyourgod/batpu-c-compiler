@@ -4,6 +4,7 @@ mod lexer;
 mod parser;
 mod semantic_analysis;
 mod tacky;
+mod optimizations;
 mod code_gen;
 mod emitter;
 
@@ -151,6 +152,10 @@ fn compile(input_file: &String, include_comments: bool) -> String {
 
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
     let program = tacky.emit();
+
+    // println!("{:#?}", program);
+
+    let program = optimizations::optimize(program);
 
     //println!("{:#?}", program);
 

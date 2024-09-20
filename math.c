@@ -45,27 +45,29 @@ static int atoi(char* str) {
     return res;
 }
 
-static struct Token lexer_get_next_token(struct Lexer* self) {
+static struct Token* lexer_get_next_token(struct Lexer* self) {
     char value[2] = { 'b', '\0' };
-    struct Token token = {0, value};
+    struct Token* token = malloc(sizeof (struct Token));
+    token->type = 0;
+    token->value = value;
 
     while (self->input[self->position] != '\0') {
         if (isdigit(self->input[self->position])) {
-            token.type = TOKEN_INT;
+            token->type = TOKEN_INT;
             int i = 0;
             while (isdigit(self->input[self->position])) {
-                token.value[i] = self->input[self->position];
+                token->value[i] = self->input[self->position];
                 i++;
                 self->position++;
             }
-            token.value[i] = '\0';
+            token->value[i] = '\0';
             break;
         } else if (self->input[self->position] == '.') {
-            token.type = TOKEN_ADD;
+            token->type = TOKEN_ADD;
             self->position++;
             break;
         } else if (self->input[self->position] == '!') {
-            token.type = TOKEN_SUB;
+            token->type = TOKEN_SUB;
             self->position++;
             break;
         /*
@@ -79,11 +81,11 @@ static struct Token lexer_get_next_token(struct Lexer* self) {
             break;
         */
         } else if (self->input[self->position] == 'x') {
-            token.type = TOKEN_LPAREN;
+            token->type = TOKEN_LPAREN;
             self->position++;
             break;
         } else if (self->input[self->position] == 'y') {
-            token.type = TOKEN_RPAREN;
+            token->type = TOKEN_RPAREN;
             self->position++;
             break;
         } else {
@@ -92,22 +94,22 @@ static struct Token lexer_get_next_token(struct Lexer* self) {
     }
 
     if (self->input[self->position] == '\0') {
-        token.type = TOKEN_EOF;
+        token->type = TOKEN_EOF;
     }
 
     return token;
 }
 
-static struct Token lexer_peek_next_token(struct Lexer* self) {
+static struct Token* lexer_peek_next_token(struct Lexer* self) {
     int position = self->position;
-    struct Token token = lexer_get_next_token(self);
+    struct Token* token = lexer_get_next_token(self);
     self->position = position;
     return token;
 }
 
-static struct Token lexer_eat_token(struct Lexer* self, int type) {
-    struct Token token = lexer_get_next_token(self);
-    if (token.type != type) {
+static struct Token* lexer_eat_token(struct Lexer* self, int type) {
+    struct Token* token = lexer_get_next_token(self);
+    if (token->type != type) {
         //printf("expected: %d, got: %d\n", type, token.type);
         //printf("Invalid syntax\n");
         exit(255);
@@ -115,10 +117,10 @@ static struct Token lexer_eat_token(struct Lexer* self, int type) {
     return token;
 }
 
-static struct Token lexer_eat_token_value(struct Lexer* self, int type, char* value) {
-    struct Token token = lexer_get_next_token(self);
+static struct Token* lexer_eat_token_value(struct Lexer* self, int type, char* value) {
+    struct Token* token = lexer_get_next_token(self);
     // || strcmp(token.value, value) != 0
-    if (token.type != type) {
+    if (token->type != type) {
         //printf("Invalid syntax\n");
         exit(255);
     }
@@ -131,7 +133,7 @@ static struct Token lexer_eat_token_value(struct Lexer* self, int type, char* va
 
 struct Parser {
     struct Lexer* lexer;
-    struct Token current_token;
+    struct Token* current_token;
 };
 
 struct Node {
@@ -141,13 +143,15 @@ struct Node {
     struct Node* right;
 };
 
-static struct Parser parser_init(struct Lexer* lexer) {
-    struct Parser parser = {lexer, lexer_get_next_token(lexer)};
+static struct Parser* parser_init(struct Lexer* lexer) {
+    struct Parser* parser = malloc(sizeof (struct Parser));
+    parser->lexer = lexer;
+    parser->current_token = lexer_get_next_token(lexer);
     return parser;
 }
 
 static void parser_eat(struct Parser* self, int type) {
-    if (self->current_token.type == type) {
+    if (self->current_token->type == type) {
         self->current_token = lexer_get_next_token(self->lexer);
     } else {
         //printf("Invalid syntax\n");
@@ -158,7 +162,7 @@ static void parser_eat(struct Parser* self, int type) {
 static struct Node* parse_int(struct Parser* self) {
     struct Node* node = (struct Node*)malloc(sizeof(struct Node));
     node->type = TOKEN_INT;
-    node->value = atoi(self->current_token.value);
+    node->value = atoi(self->current_token->value);
     parser_eat(self, TOKEN_INT);
     return node;
 }
@@ -166,11 +170,11 @@ static struct Node* parse_int(struct Parser* self) {
 static struct Node* parser_expr(struct Parser* self); // forward declaration because c is a pain
 
 static struct Node* parser_factor(struct Parser* self) {
-    if (self->current_token.type == TOKEN_INT) {
+    if (self->current_token->type == TOKEN_INT) {
         struct Node* node = parse_int(self);
         return node;
     }
-    if (self->current_token.type == TOKEN_LPAREN) {
+    if (self->current_token->type == TOKEN_LPAREN) {
         parser_eat(self, TOKEN_LPAREN);
         struct Node* node = parser_expr(self);
         parser_eat(self, TOKEN_RPAREN);
@@ -181,14 +185,14 @@ static struct Node* parser_factor(struct Parser* self) {
 static struct Node* parser_term(struct Parser* self) {
     struct Node* node = parser_factor(self);
 
-    while ((self->current_token.type == TOKEN_MUL) || (self->current_token.type == TOKEN_DIV)) {
-        struct Token token = self->current_token;
-        parser_eat(self, token.type);
+    while ((self->current_token->type == TOKEN_MUL) || (self->current_token->type == TOKEN_DIV)) {
+        struct Token *token = self->current_token;
+        parser_eat(self, token->type);
 
         struct Node* right = parser_factor(self);
 
         struct Node* new_node = (struct Node*)malloc(sizeof(struct Node));
-        new_node->type = token.type;
+        new_node->type = token->type;
         new_node->left = node;
         new_node->right = right;
 
@@ -201,14 +205,14 @@ static struct Node* parser_term(struct Parser* self) {
 static struct Node* parser_expr(struct Parser* self) {
     struct Node* node = parser_term(self);
 
-    while ((self->current_token.type == TOKEN_ADD) || (self->current_token.type == TOKEN_SUB)) {
-        struct Token token = self->current_token;
-        parser_eat(self, token.type);
+    while ((self->current_token->type == TOKEN_ADD) || (self->current_token->type == TOKEN_SUB)) {
+        struct Token* token = self->current_token;
+        parser_eat(self, token->type);
 
         struct Node* right = parser_term(self);
 
         struct Node* new_node = (struct Node*)malloc(sizeof(struct Node));
-        new_node->type = token.type;
+        new_node->type = token->type;
         new_node->left = node;
         new_node->right = right;
 
@@ -286,9 +290,9 @@ static int main() {
     struct Lexer lexer = {0, input};
 
     // parse the input
-    struct Parser parser = parser_init(&lexer);
+    struct Parser* parser = parser_init(&lexer);
 
-    struct Node* ast = parser_expr(&parser);
+    struct Node* ast = parser_expr(parser);
 
     return interpret(ast);
 }

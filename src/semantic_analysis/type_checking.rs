@@ -73,9 +73,17 @@ impl TypeChecker {
             _ => panic!("Expected Fn, got {:?}", decl.ty),
         };
 
+        if let nodes::Type::Struct(ref tag) = **ret_type {
+            panic!("Cant send structs as ret type rn (tag = {})", tag);
+        }
+
         let body = if has_body {
             for (idx, param) in decl.params.iter().enumerate() {
                 let param_type = &param_types[idx];
+
+                if let nodes::Type::Struct(_) = param_type {
+                    panic!("Cant send structs as params rn");
+                }
 
                 if !self.is_complete_type(param_type) {
                     panic!("Incomplete type in function parameter");

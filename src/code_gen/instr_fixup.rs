@@ -47,11 +47,6 @@ impl InstructionFixupPass {
             self.generate_instruction(stmt, &mut instrs);
         }
 
-        instrs.push(assembly::Instruction::Adi(
-            assembly::Operand::Register(assembly::Register::new("r14".to_string())),
-            func.stack_size as i8,
-        ));
-
         let func = assembly::FuncDecl {
             name: func.name.clone(),
             body: instrs,

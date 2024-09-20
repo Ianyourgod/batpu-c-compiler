@@ -152,12 +152,12 @@ impl PseudoReplacePass {
 
                 context.stack_offset += self.struct_table.type_size(ty) as i16;
 
-                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so + 1)));
+                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", ident, so)));
 
-                self.symbol_table.insert(ident.clone(), so + 1);
+                self.symbol_table.insert(ident.clone(), so);
                 assembly::Operand::Memory(
                     assembly::Register { name: "r15".to_string() },
-                    so + 1,
+                    so,
                 )
             },
             assembly::Operand::PseudoMem(name, offset, ty) => {
@@ -179,12 +179,12 @@ impl PseudoReplacePass {
 
                 context.stack_offset += self.struct_table.type_size(ty) as i16;
 
-                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so + 1)));
+                instructions.push(assembly::Instruction::Comment(format!("Using var {}, at index {}", name, so)));
 
-                self.symbol_table.insert(name.clone(), so + 1);
+                self.symbol_table.insert(name.clone(), so);
                 assembly::Operand::Memory(
                     assembly::Register { name: "r15".to_string() },
-                    so + 1,
+                    so,
                 )
             },
             _ => operand.clone(),

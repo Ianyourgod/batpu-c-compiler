@@ -19,7 +19,7 @@ pub struct FuncDef {
     pub global: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     Return(Option<Val>),
     Unary(Unop, Val, Val),
@@ -38,7 +38,7 @@ pub enum Instruction {
     AddPtr(Val, Val, Val, Val), // val, val, offset, dest
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Val {
     Const(i8),
     Var(String, Type),
@@ -46,7 +46,7 @@ pub enum Val {
     SubObject((String, Type), i16), // identifier, offset
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Unop {
     Negate,
     BitwiseNot,
@@ -54,7 +54,7 @@ pub enum Unop {
     AddImm,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Binop {
     Add,
     Subtract,
