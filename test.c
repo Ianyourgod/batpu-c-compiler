@@ -1,14 +1,18 @@
-static int main() {
-    int a1 = 1;
-    int a2 = 2;
-    int a3 = 3;
-    int a4 = 4;
-    int a5 = 5;
-    int a6 = 6;
-    int a7 = 7;
-    int a8 = 8;
-    int a9 = 9;
-    int a10 = 10;
+static void mem_write(int addr, int val);
 
-    return a1+a2+a3+a4+a5+a6+a7+a8+a9+a10;
+static void printf(char* str) {
+    mem_write(249, 1);
+    while (*str != '\0') {
+        mem_write(247, (int)*str);
+        mem_write(248, 1);
+        str--;
+    }
+    mem_write(248, 1);
+}
+
+static int main() {
+    char input[11] = { 'h', 'e', 'l', 'l', 'o', 'w', 'o', 'r', 'l', 'd', '\0' };
+    printf(input);
+
+    return 0;
 }

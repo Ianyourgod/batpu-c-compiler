@@ -34,6 +34,7 @@ pub fn optimize(program: definition::Program) -> definition::Program {
 }
 
 pub fn optimize_function(func: Vec<definition::Instruction>) -> Vec<definition::Instruction> {
+
     if func.len() == 0 {
         return func;
     }

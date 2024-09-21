@@ -222,29 +222,6 @@ static struct Node* parser_expr(struct Parser* self) {
     return node;
 }
 
-/********************\
-|     * MAIN *       |
-\********************/
-
-/*
-static void print_node(struct Node node) {
-    if (node.type == TOKEN_INT) {
-        printf("%d", node.value);
-    } else {
-        print_node(*node.left);
-        if (node.type == TOKEN_ADD) {
-            printf("+");
-        } else if (node.type == TOKEN_SUB) {
-            printf("-");
-        } else if (node.type == TOKEN_MUL) {
-            printf("*");
-        } else if (node.type == TOKEN_DIV) {
-            printf("/");
-        }
-        print_node(*node.right);
-    }
-}
-*/
 
 static void free_node(struct Node* node) {
     if (node->type != TOKEN_INT) {

@@ -19,14 +19,37 @@ impl UnreachableCodeElimination {
     }
 
     fn eliminate_unused_blocks(&self, cfg: cfg::CFG) -> cfg::CFG {
-        let starting_block = self.cfg.nodes[0].get_id();
+        let starting_block = cfg::NodeID::ENTRY;
 
         let visited = self.get_possible_visited_blocks(&starting_block, &vec![starting_block.clone()]);
 
         let mut new_nodes = Vec::new();
+
         for node in &cfg.nodes {
             if visited.contains(&node.get_id()) {
-                new_nodes.push(node.clone());
+                match node.get_id() {
+                    cfg::NodeID::ENTRY => new_nodes.push(node.clone()),
+                    cfg::NodeID::EXIT => {
+                        let preds = node.get_predecessors();
+
+                        let preds: Vec<cfg::NodeID> = preds.iter().filter(|id| visited.contains(id)).cloned().collect();
+
+                        new_nodes.push(cfg::Node::Exit(cfg::NodeID::EXIT, preds));
+                    }
+                    cfg::NodeID::BlockID(id) => {
+                        let preds = node.get_predecessors();
+
+                        let preds: Vec<cfg::NodeID> = preds.iter().filter(|id| visited.contains(id)).cloned().collect();
+
+                        new_nodes.push(cfg::Node::BasicBlock(
+                            cfg::NodeID::BlockID(id),
+                            node.get_instructions(),
+                            preds,
+                            node.get_successors().clone(),
+                        ));
+
+                    }
+                }
             }
         }
 
@@ -36,7 +59,7 @@ impl UnreachableCodeElimination {
     }
 
     fn get_possible_visited_blocks(&self, block: &cfg::NodeID, found: &Vec<cfg::NodeID>) -> Vec<cfg::NodeID> {
-        let mut possible_blocks = Vec::new();
+        let mut possible_blocks = found.clone();
 
         let successors = cfg::get_block_by_id(block, &self.cfg.nodes).get_successors().clone();
         for successor in &successors {
@@ -46,9 +69,8 @@ impl UnreachableCodeElimination {
             if possible_blocks.contains(successor) || found.contains(&successor) {
                 continue;
             }
-            let mut found_with_possible = found.clone();
+            let mut found_with_possible = possible_blocks.clone();
             found_with_possible.push(successor.clone());
-            found_with_possible.extend(possible_blocks.clone());
             possible_blocks.extend(self.get_possible_visited_blocks(successor, &found_with_possible));
         }
         possible_blocks.extend(successors.clone());

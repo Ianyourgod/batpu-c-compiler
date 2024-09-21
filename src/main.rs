@@ -8,6 +8,7 @@ mod optimizations;
 mod code_gen;
 mod emitter;
 
+#[derive(Clone)]
 pub struct Settings {
     pub link_files: Vec<String>,
     pub input_names: Vec<String>,
@@ -15,6 +16,7 @@ pub struct Settings {
     pub do_not_link: bool,
     pub do_not_assemble: bool,
     pub include_comments: bool,
+    pub dont_optimize: bool,
 }
 
 fn parse_args() -> Settings {
@@ -27,6 +29,7 @@ fn parse_args() -> Settings {
     let mut do_not_link = false;
     let mut do_not_assemble = false;
     let mut include_comments = false;
+    let mut dont_optimize = false;
 
     args.nth(0);
     while 1 <= args.len() {
@@ -48,6 +51,9 @@ fn parse_args() -> Settings {
             "-f" => {
                 include_comments = true;
             },
+            "-O0" => {
+                dont_optimize = true;
+            },
             _ => {
                 input_names.push(arg);
             },
@@ -65,6 +71,7 @@ fn parse_args() -> Settings {
         do_not_link,
         do_not_assemble,
         include_comments,
+        dont_optimize,
     }
 }
 
@@ -119,7 +126,7 @@ fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String,
     }
 }
 
-fn compile(input_file: &String, include_comments: bool) -> String {
+fn compile(input_file: &String, args: Settings) -> String {
     // preprocess input
     // call "gcc -E -P input_file -o .tmpbc/input_file.i"
     let mut binding = std::process::Command::new("gcc");
@@ -151,11 +158,14 @@ fn compile(input_file: &String, include_comments: bool) -> String {
     //println!("{:#?}", program);
 
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
-    let program = tacky.emit();
+    let mut program = tacky.emit();
 
     // println!("{:#?}", program);
 
-    let program = optimizations::optimize(program);
+    if !args.dont_optimize {
+        program = optimizations::optimize(program);
+    }
+
 
     //println!("{:#?}", program);
 
@@ -164,7 +174,7 @@ fn compile(input_file: &String, include_comments: bool) -> String {
     //println!("{:#?}", assembly);
 
     let emitter = emitter::Emitter::new(assembly);
-    let output = emitter.emit(include_comments);
+    let output = emitter.emit(args.include_comments);
     output
 }
 
@@ -173,8 +183,8 @@ fn main() {
     let args = parse_args();
 
     let mut outputs = Vec::new();
-    for input_name in args.input_names {
-        let output = compile(&input_name, args.include_comments);
+    for input_name in &args.input_names {
+        let output = compile(input_name, args.clone());
 
         outputs.push(output);
     }

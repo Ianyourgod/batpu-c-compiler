@@ -48,6 +48,7 @@ impl DeadStoreElimination {
 
     pub fn eliminate(&mut self) -> cfg::CFG {
         let cfg = self.cfg.clone();
+
         self.find_deadness(&cfg);
 
         let mut new_cfg = cfg::CFG {
@@ -187,6 +188,8 @@ impl DeadStoreElimination {
                 definition::Instruction::Jump(_) => (),
             }
         }
+
+        self.annotations.block_annotations.insert(id.clone(), current_live_variables);
     }
 
     fn meet(&self, block: &cfg::Node) -> Annotation {
@@ -225,7 +228,7 @@ impl DeadStoreElimination {
                 }
             }
         }
-
+        
         while worklist.len() > 0 {
             let block_id = worklist.pop().unwrap();
 
@@ -233,16 +236,17 @@ impl DeadStoreElimination {
 
             let old_annotation = self.annotations.get_block_annotation(&block_id).unwrap().clone();
             let incoming_copies = self.meet(&block);
+
             self.transfer(&block, &incoming_copies);
 
             if old_annotation != *self.annotations.get_block_annotation(&block_id).unwrap() {
-                for succ_id in block.get_predecessors() {
-                    match succ_id {
-                        cfg::NodeID::ENTRY => panic!("Mal formed CFG"),
-                        cfg::NodeID::EXIT => continue,
+                for pred_id in block.get_predecessors() {
+                    match pred_id {
+                        cfg::NodeID::ENTRY => continue,
+                        cfg::NodeID::EXIT => panic!("Mal formed CFG"),
                         cfg::NodeID::BlockID(_) => {
-                            if !worklist.contains(&succ_id) {
-                                worklist.push(succ_id.clone());
+                            if !worklist.contains(&pred_id) {
+                                worklist.push(pred_id.clone());
                             }
                         }
                     }
