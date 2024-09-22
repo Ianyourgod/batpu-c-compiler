@@ -56,7 +56,7 @@ pub enum TokenType {
 
     // Literals
     Identifier(String),
-    IntegerLiteral(i8),
+    IntegerLiteral(i16),
     CharLiteral(char),
     // End of file
     EOF,
@@ -230,7 +230,7 @@ impl Lexer {
         self.input[start..self.position].to_string()
     }
 
-    fn read_number(&mut self) -> i8 {
+    fn read_number(&mut self) -> i16 {
         let start = self.position;
         while is_digit(self.ch) {
             self.read_char();
@@ -238,7 +238,7 @@ impl Lexer {
         let num = self.input[start..self.position].parse::<i16>();
 
         match num {
-            Ok(n) => n as i8,
+            Ok(n) => n as i16,
             Err(_) => panic!("Failed to parse number"),
         }
     }

@@ -160,12 +160,11 @@ fn compile(input_file: &String, args: Settings) -> String {
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
     let mut program = tacky.emit();
 
-    // println!("{:#?}", program);
+    //println!("{:#?}", program);
 
     if !args.dont_optimize {
         program = optimizations::optimize(program);
     }
-
 
     //println!("{:#?}", program);
 

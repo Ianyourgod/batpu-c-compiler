@@ -305,7 +305,7 @@ impl InstructionFixupPass {
 
                 instructions.push(assembly::Instruction::Adi(
                     assembly::Operand::Register(src.0.clone()),
-                    -src.1 as i8,
+                    -src.1 as i16,
                 ));
 
                 if is_dst_reg {
@@ -315,7 +315,7 @@ impl InstructionFixupPass {
                     ));
                     instructions.push(assembly::Instruction::Adi(
                         assembly::Operand::Register(src.0),
-                        src.1 as i8,
+                        src.1 as i16,
                     ));
                     return;
                 }
@@ -329,7 +329,7 @@ impl InstructionFixupPass {
 
                 instructions.push(assembly::Instruction::Adi(
                     assembly::Operand::Register(src.0),
-                    src.1 as i8,
+                    src.1 as i16,
                 ));
 
                 let (is_mem, base_reg, offset) = self.is_mem(dst);

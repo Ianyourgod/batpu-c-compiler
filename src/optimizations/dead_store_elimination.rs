@@ -282,7 +282,7 @@ impl DeadStoreElimination {
             definition::Instruction::Load(_, dst) |
             definition::Instruction::CopyFromOffset(_, _, dst) |
             definition::Instruction::GetAddress(_, dst) |
-            definition::Instruction::Copy(_, dst) => {
+            definition::Instruction::Copy(dst, _) => {
                 if self.is_var(dst) {
                     return !self.annotations.get_instruction_annotation(id).unwrap().live.contains(dst);
                 }

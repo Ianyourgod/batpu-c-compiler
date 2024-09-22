@@ -48,7 +48,7 @@ impl ConstantFolding {
         out
     }
 
-    fn is_constant(&self, operand: &definition::Val) -> (bool, i8) {
+    fn is_constant(&self, operand: &definition::Val) -> (bool, i16) {
         match operand {
             definition::Val::Const(val) => (true, *val),
             _ => (false, 0),

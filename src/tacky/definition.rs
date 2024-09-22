@@ -40,7 +40,7 @@ pub enum Instruction {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Val {
-    Const(i8),
+    Const(i16),
     Var(String, Type),
     DereferencedPtr(Box<Val>),
     SubObject((String, Type), i16), // identifier, offset

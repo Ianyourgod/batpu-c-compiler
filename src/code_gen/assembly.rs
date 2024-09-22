@@ -30,8 +30,8 @@ pub enum CondCode {
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Mov(Operand, Operand),
-    Ldi(Operand, i8),
-    Adi(Operand, i8),
+    Ldi(Operand, i16),
+    Adi(Operand, i16),
     Unary(Unop, Operand, Operand),
     Binary(Binop, Operand, Operand, Operand),
     Cmp(Operand, Operand),
@@ -60,7 +60,7 @@ pub enum Unop {
 
 #[derive(Debug, Clone)]
 pub enum Operand {
-    Immediate(i8),
+    Immediate(i16),
     Register(Register),
     Pseudo(String, Type),
     PseudoMem(String, i16, Type),

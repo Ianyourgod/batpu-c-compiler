@@ -132,7 +132,9 @@ ret
                     output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
                     for instr in &func.body {
                         if let assembly::Instruction::Comment(_) = instr { if !include_comments { continue; } }
-                        output.push_str(&format!("    {}\n", self.emit_instruction(instr)));
+                        let instr = self.emit_instruction(instr);
+                        if instr.is_empty() { continue; }
+                        output.push_str(&format!("    {}\n", instr));
                     }
                 },
                 #[allow(unused_variables)]
@@ -219,6 +221,9 @@ ret
                         self.emit_operand(dst))
             }
             assembly::Instruction::AllocateStack(i) => {
+                if *i == 0 {
+                    return "".to_string();
+                }
                 format!("adi r14 -{}", i)
             }
             assembly::Instruction::Adi(ref reg, i) => {

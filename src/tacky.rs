@@ -112,7 +112,7 @@ impl Tacky {
         }
     }
 
-    fn handle_initializer(&mut self, init: &nodes::Initializer, body: &mut Vec<definition::Instruction>, name: String, ty: &definition::Type, mut offset: i8, top_level: bool) {
+    fn handle_initializer(&mut self, init: &nodes::Initializer, body: &mut Vec<definition::Instruction>, name: String, ty: &definition::Type, mut offset: i16, top_level: bool) {
         match init {
             nodes::Initializer::Single(ref expr) => {
                 let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
@@ -127,13 +127,13 @@ impl Tacky {
                     definition::Type::Array(inner_ty, _) => {
                         for init in inits {
                             self.handle_initializer(init, body, name.clone(), ty, offset, false);
-                            offset += inner_ty.size() as i8;
+                            offset += inner_ty.size() as i16;
                         }
                     }
                     definition::Type::Struct(tag) => {
                         let members = self.type_table.lookup(tag).unwrap().1.clone();
                         for (member, init) in members.iter().zip(inits) {
-                            let member_offset = member.offset as i8;
+                            let member_offset = member.offset as i16;
                             self.handle_initializer(init, body, name.clone(), ty, offset + member_offset, false);
                         }
                     }
@@ -308,10 +308,10 @@ impl Tacky {
                         false
                     };
 
-                    body.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(sh_circ_val as i8)));
+                    body.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(sh_circ_val as i16)));
                     body.push(definition::Instruction::Jump(short_circuit_end_label.clone()));
                     body.push(definition::Instruction::Label(short_circuit_label.clone()));
-                    body.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const((!sh_circ_val) as i8)));
+                    body.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const((!sh_circ_val) as i16)));
                     body.push(definition::Instruction::Label(short_circuit_end_label.clone()));
 
                     return dest;
@@ -422,7 +422,7 @@ impl Tacky {
                         let dest_name = self.make_temporary();
                         let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                         body.push(definition::Instruction::GetAddress(definition::Val::Var(var.0, var.1), dest.clone()));
-                        body.push(definition::Instruction::AddPtr(dest.clone(), definition::Val::Const(offset as i8), definition::Val::Const(1), dest.clone()));
+                        body.push(definition::Instruction::AddPtr(dest.clone(), definition::Val::Const(offset as i16), definition::Val::Const(1), dest.clone()));
                         dest
                     },
                     _ => {
@@ -441,7 +441,7 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                 
-                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(ty.size() as i8), dest.clone()));
+                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(ty.size() as i16), dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
             nodes::ExpressionEnum::CharLiteral(ch) => {
@@ -456,12 +456,12 @@ impl Tacky {
                 self.emit_tacky_and_convert(&expr.expr, body, to)
             }
             nodes::ExpressionEnum::SizeOf(expr) => {
-                definition::Val::Const(expr.ty.size() as i8)
+                definition::Val::Const(expr.ty.size() as i16)
             }
             nodes::ExpressionEnum::SizeOfType(ty) => {
                 definition::Val::Const(match ty {
-                    nodes::Type::Struct(tag) => self.type_table.lookup(tag).unwrap().0 as i8,
-                    _ => ty.size() as i8,
+                    nodes::Type::Struct(tag) => self.type_table.lookup(tag).unwrap().0 as i16,
+                    _ => ty.size() as i16,
                 })
             }
             nodes::ExpressionEnum::Dot(ref expr, ref member) => {
@@ -480,7 +480,7 @@ impl Tacky {
                         let dest_name = self.make_temporary();
                         let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                         
-                        body.push(definition::Instruction::AddPtr(*ptr, definition::Val::Const(member_offset as i8), definition::Val::Const(1), dest.clone()));
+                        body.push(definition::Instruction::AddPtr(*ptr, definition::Val::Const(member_offset as i16), definition::Val::Const(1), dest.clone()));
 
                         definition::Val::DereferencedPtr(Box::new(dest))
                     }
@@ -505,13 +505,13 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
 
-                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i8), definition::Val::Const(1), dest.clone()));
+                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i16), definition::Val::Const(1), dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
         }
     }
 
-    fn char_to_int(ch: char) -> i8 {
+    fn char_to_int(ch: char) -> i16 {
         /*
          0 - SPACE
          1 - 26 - A - Z
@@ -524,7 +524,7 @@ impl Tacky {
 
         match ch {
             ' ' => 0,
-            'a'..='z' => ch as i8 - 96,
+            'a'..='z' => ch as i16 - 96,
             '.' => 27,
             '!' => 28,
             '?' => 29,
