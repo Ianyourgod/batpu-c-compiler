@@ -25,7 +25,7 @@ fn parse_args() -> Settings {
     let mut input_names = Vec::new();
 
     let mut link_files = Vec::new();
-    let mut output_name = "output.mc".to_string();
+    let mut output_name = String::new();
     let mut do_not_link = false;
     let mut do_not_assemble = false;
     let mut include_comments = false;
@@ -63,6 +63,12 @@ fn parse_args() -> Settings {
     if input_names.is_empty() {
         panic!("No input files provided");
     }
+
+    output_name = if do_not_assemble && output_name.is_empty() {
+        "output.as".to_string()
+    } else {
+        "output.mc".to_string()
+    };
 
     Settings {
         link_files,
@@ -190,5 +196,8 @@ fn main() {
 
     if !args.do_not_assemble {
         assemble(outputs, args.link_files, args.output_name, args.do_not_link);
+    } else {
+        // write it to file
+        std::fs::write(args.output_name, outputs.join("\n")).expect("Failed to write to file");
     }
 }

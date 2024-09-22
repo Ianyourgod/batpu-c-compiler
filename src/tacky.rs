@@ -505,7 +505,7 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
 
-                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i16), definition::Val::Const(1), dest.clone()));
+                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(-member_offset as i16), definition::Val::Const(1), dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
         }
@@ -518,6 +518,7 @@ impl Tacky {
          27 - .
          28 - !
          29 - ?
+         // others, just do ascii
          */
 
         let ch = ch.to_ascii_lowercase();
@@ -529,7 +530,7 @@ impl Tacky {
             '!' => 28,
             '?' => 29,
             '\0' => 30,
-            _ => panic!("Invalid character: {:?}", ch),
+            _ => ch as i16,
         }
     }
 

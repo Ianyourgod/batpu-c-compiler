@@ -19,6 +19,48 @@ static int main() {
 }
 */
 
+static void mem_write(int addr, int val);
+static void exit(int code);
+static void* malloc(int size);
+static void free(void* pos);
+static int __mult(int a, int b);
+
+#define NULL 0
+
+#define ADD 0
+#define SUB 1
+#define MUL 2
+#define INT 3
+
+struct Node {
+    int type;
+    int value;
+    struct Node* right;
+};
+
+static int interpret(struct Node* node) {
+    if (node->type == INT) {
+        return node->value;
+    } else {
+        int left = interpret((struct Node*) node->value);
+        int right = interpret(node->right);
+        if (node->type == ADD) {
+            return left + right;
+        } else if (node->type == SUB) {
+            return left - right;
+        } else if (node->type == MUL) {
+            return __mult(left, right);
+        }
+    }
+    exit(255);
+}
+
 static int main() {
-    return 1+2+3+4+5+6+7+8+9+10+11+12+13+14+15+16+17+18+19+20;
+    struct Node one = { INT, 1, NULL };
+    struct Node two = { INT, 2, NULL };
+    struct Node three = { INT, 3, NULL };
+    struct Node add = { ADD, (int) &one, &two };
+    struct Node ast = { MUL, (int) &add, &three };
+
+    return interpret(&ast);
 }
