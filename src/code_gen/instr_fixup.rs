@@ -220,7 +220,7 @@ impl InstructionFixupPass {
                 } else {
                     let src1_reg = if is_src1_reg { src1_reg } else { assembly::Register::new("r10".to_string()) };
                     let src2_reg = if is_src2_reg { src2_reg } else { assembly::Register::new("r11".to_string()) };
-                    let dst_reg = if is_dst_reg { dst_reg } else { assembly::Register::new("r12".to_string()) }; 
+                    let dst_reg = if is_dst_reg { dst_reg } else { assembly::Register::new("r11".to_string()) }; 
 
                     if !is_src1_reg { self.to_register(src1, &src1_reg, instructions) };
                     if !is_src2_reg { self.to_register(src2, &src2_reg, instructions) };
