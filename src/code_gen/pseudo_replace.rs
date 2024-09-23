@@ -50,7 +50,7 @@ impl PseudoReplacePass {
     fn generate_function(&mut self, func: &assembly::FuncDecl, program: &mut assembly::Program) {
         let mut instrs: Vec<assembly::Instruction> = Vec::new();
 
-        let mut context = Context { stack_offset: 0 };
+        let mut context = Context { stack_offset: func.stack_size };
 
         for stmt in &func.body {
             self.generate_instruction(stmt, &mut instrs, &mut context);

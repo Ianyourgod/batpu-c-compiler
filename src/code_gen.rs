@@ -12,7 +12,8 @@ use crate::tacky::definition;
 pub fn convert(program: definition::Program, type_table: SymbolTable, struct_table: TypeTable) -> assembly::Program {
     let mut convert_pass = convert::ConvertPass::new(program);
 
-    let program = convert_pass.generate();
+    #[allow(unused_variables)]
+    let (program, function_table) = convert_pass.generate();
 
     //println!("{:#?}", program);
 

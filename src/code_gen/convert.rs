@@ -1,23 +1,18 @@
 use crate::code_gen::assembly;
 use crate::tacky::definition;
 
-// we use as many registers as we can for parameters, as the cpu doesnt have a lot of memory
 macro_rules! param_registers {
     () => {
         vec![
-            assembly::Register::new("r1".to_string()),
-            assembly::Register::new("r2".to_string()),
-            assembly::Register::new("r3".to_string()),
-            assembly::Register::new("r4".to_string()),
-            assembly::Register::new("r5".to_string()),
-            assembly::Register::new("r6".to_string()),
-            assembly::Register::new("r7".to_string()),
-            assembly::Register::new("r8".to_string()),
-            assembly::Register::new("r9".to_string()),
-            assembly::Register::new("r10".to_string()),
-            assembly::Register::new("r11".to_string()),
-            assembly::Register::new("r12".to_string()),
-            assembly::Register::new("r13".to_string()),
+            assembly::Register::new(String::from("r1")),
+            assembly::Register::new(String::from("r2")),
+            assembly::Register::new(String::from("r3")),
+            assembly::Register::new(String::from("r4")),
+            assembly::Register::new(String::from("r5")),
+            assembly::Register::new(String::from("r6")),
+            assembly::Register::new(String::from("r7")),
+            assembly::Register::new(String::from("r8")),
+            assembly::Register::new(String::from("r9")),
         ]
     };
 }
@@ -25,6 +20,7 @@ macro_rules! param_registers {
 pub struct ConvertPass {
     program: definition::Program,
     tmp_counter: u32,
+    function_table: assembly::FunctionTable,
 }
 
 impl ConvertPass {
@@ -32,10 +28,11 @@ impl ConvertPass {
         ConvertPass {
             program,
             tmp_counter: 0,
+            function_table: assembly::FunctionTable::new(),
         }
     }
 
-    pub fn generate(&mut self) -> assembly::Program {
+    pub fn generate(&mut self) -> (assembly::Program, assembly::FunctionTable) {
         let mut assembly = assembly::Program {
             statements: Vec::new(),
         };
@@ -47,24 +44,15 @@ impl ConvertPass {
             }
         }
 
-        assembly
+        (assembly, self.function_table.clone())
     }
 
     fn generate_function(&mut self, func: &definition::FuncDef, program: &mut assembly::Program) {
         let mut instrs: Vec<assembly::Instruction> = Vec::new();
 
-        let param_regs = param_registers!();
-        let mut current_reg = 0;
-        for param in &func.params {
-            if current_reg >= param_regs.len() {
-                panic!("Too many parameters");
-            }
-            instrs.push(assembly::Instruction::Mov(
-                assembly::Operand::Register(param_regs[current_reg].clone()),
-                assembly::Operand::Pseudo(param.0.clone(), param.1.clone()),
-            ));
-            current_reg += 1;
-        }
+        let params = func.params.iter().map(|(n, t)| definition::Val::Var(n.clone(), t.clone())).collect();
+
+        let offset = self.set_up_parameters(func.name.clone(), params, &mut instrs);
 
         for stmt in &func.body {
             self.generate_instruction(stmt, &mut instrs);
@@ -73,7 +61,7 @@ impl ConvertPass {
         let func = assembly::FuncDecl {
             name: func.name.clone(),
             body: instrs,
-            stack_size: 0,
+            stack_size: offset,
             global: func.global,
         };
 
@@ -88,6 +76,74 @@ impl ConvertPass {
         let label = format!("cL.{}.{}", label, self.tmp_counter); 
         self.tmp_counter += 1;
         label
+    }
+
+    fn classify_parameters(&self, values: Vec<definition::Val>) -> (Vec<(assembly::Operand, assembly::Register)>, Vec<(assembly::Operand, i16)>) { // (registers, stack)
+        let mut reg_args = Vec::new();
+        let mut stack_args = Vec::new();
+
+        let param_regs = param_registers!();
+
+        for (i, val) in values.iter().enumerate() {
+            let converted = self.convert_val(&val);
+            if reg_args.len() < param_regs.len() {
+                reg_args.push((converted, param_regs[i].clone()));
+            } else {
+                let size = self.size_of_operand(&converted);
+                stack_args.push((converted, size));
+            }
+        }
+
+        (reg_args, stack_args)
+    } 
+
+    fn set_up_parameters(&mut self, name: String, params: Vec<definition::Val>, instructions: &mut Vec<assembly::Instruction>) -> i16 {
+        let (reg_args, stack_args) = self.classify_parameters(params);
+
+        let mut used_regs = Vec::new();
+        for (val, reg) in reg_args {
+            // move the value to the register
+            used_regs.push(reg.clone());
+            instructions.push(assembly::Instruction::Mov(
+                assembly::Operand::Register(reg),
+                val
+            ));
+        }
+
+        self.function_table.insert(name, used_regs);
+
+        let mut offset = 0;
+        for (val, size) in stack_args {
+            // move the value to the stack
+            instructions.push(assembly::Instruction::Mov(
+                assembly::Operand::Memory(assembly::Register::new("r15".to_string()), -offset),
+                val
+            ));
+            offset += size;
+        }
+
+        offset
+    }
+
+    fn type_of_operand(&self, val: &assembly::Operand) -> definition::Type {
+        match val {
+            assembly::Operand::Immediate(_) => definition::Type::Int,
+            assembly::Operand::Pseudo(_, ty) => ty.clone(),
+            assembly::Operand::PseudoMem(_, _, ty) => definition::Type::Pointer(Box::new(ty.clone())),
+            _ => panic!("hey dont do that")
+        }
+    }
+
+    fn size_of_operand(&self, val: &assembly::Operand) -> i16 {
+        let ty = self.type_of_operand(val);
+
+        match ty {
+            definition::Type::Int |
+            definition::Type::Pointer(_) |
+            definition::Type::Char => 1,
+            definition::Type::Void => 0,
+            _ => panic!("hey dont do that")
+        }
     }
 
     fn generate_comparison(&mut self, op: &definition::Binop, dst: &definition::Val, instructions: &mut Vec<assembly::Instruction>) {
@@ -264,17 +320,22 @@ impl ConvertPass {
                 instructions.push(assembly::Instruction::Label(label.clone()));
             },
             definition::Instruction::FunCall(ref name, ref params, ref dst, global) => {
-                let param_regs = param_registers!();
-                let mut current_reg = 0;
-                for param in params {
-                    if current_reg >= param_regs.len() {
-                        panic!("Too many parameters");
-                    }
+                let (reg_args, stack_args) = self.classify_parameters(params.clone());
+
+                // move the parameters to the registers
+                for (val, reg) in reg_args {
                     instructions.push(assembly::Instruction::Mov(
-                        self.convert_val(param),
-                        assembly::Operand::Register(param_regs[current_reg].clone())
+                        val,
+                        assembly::Operand::Register(reg)
                     ));
-                    current_reg += 1;
+                }
+
+                // move the parameters to the stack
+                for (val, offset) in stack_args.into_iter().rev() {
+                    instructions.push(assembly::Instruction::Mov(
+                        val,
+                        assembly::Operand::Memory(assembly::Register::new("r14".to_string()), offset)
+                    ));
                 }
 
                 instructions.push(assembly::Instruction::Call(name.clone(), *global));
@@ -362,7 +423,7 @@ impl ConvertPass {
         }
     }
 
-    fn convert_val(&mut self, val: &definition::Val) -> assembly::Operand {
+    fn convert_val(&self, val: &definition::Val) -> assembly::Operand {
         match val {
             definition::Val::Const(i) => assembly::Operand::Immediate(*i),
             definition::Val::Var(ref s, ref t) => {

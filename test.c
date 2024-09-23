@@ -19,6 +19,7 @@ static int main() {
 }
 */
 
+/*
 static void mem_write(int addr, int val);
 static void exit(int code);
 static void* malloc(int size);
@@ -63,4 +64,31 @@ static int main() {
     struct Node ast = { MUL, (int) &add, &three };
 
     return interpret(&ast);
+}
+*/
+
+static void mem_write(int addr, int val);
+
+static void draw_pixel(int x, int y) {
+    mem_write(240, x);
+    mem_write(241, y);
+    mem_write(242, 1);
+}
+
+static void draw_buffer() {
+    mem_write(245, 1);
+}
+
+static void clear_buffer() {
+    mem_write(246, 1);
+}
+
+static int ton_of_args(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j);
+
+static int main() {
+    ton_of_args(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+}
+
+static int ton_of_args(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+    return a + b + c + d + e + f + g + h + i + j;
 }

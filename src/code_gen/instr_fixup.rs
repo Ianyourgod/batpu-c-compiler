@@ -68,6 +68,8 @@ impl InstructionFixupPass {
         match op {
             assembly::Operand::Register(_) | assembly::Operand::Pseudo(_, _) | assembly::Operand::PseudoMem(_, _, _) => unreachable!(),
             assembly::Operand::Immediate(val) => {
+                // TODO: rewrite this function so that if val is zero have the caller just use r0
+
                 instructions.push(assembly::Instruction::Ldi(
                     assembly::Operand::Register(reg.clone()),
                     val.clone()
@@ -103,37 +105,74 @@ impl InstructionFixupPass {
             assembly::Instruction::Comment(_) => instructions.push(stmt.clone()),
 
             assembly::Instruction::Mov(ref src, ref dst) => {
-                let (is_src_reg, src_reg) = self.is_register(src);
-                let (is_dst_reg, dst_reg) = self.is_register(dst);
+                match dst {
+                    assembly::Operand::Register(dst_reg) => {
+                        match src {
+                            assembly::Operand::Register(src_reg) => {
+                                instructions.push(assembly::Instruction::Mov(
+                                    assembly::Operand::Register(src_reg.clone()),
+                                    assembly::Operand::Register(dst_reg.clone()),
+                                ));
+                            },
+                            assembly::Operand::Immediate(imm) => {
+                                instructions.push(assembly::Instruction::Ldi(
+                                    assembly::Operand::Register(dst_reg.clone()),
+                                    imm.clone(),
+                                ));
+                            }
+                            assembly::Operand::Memory(base_reg, off) => {
+                                instructions.push(assembly::Instruction::Lod(
+                                    base_reg.clone(),
+                                    *off,
+                                    assembly::Operand::Register(dst_reg.clone()),
+                                ));
+                            }
 
-                if is_src_reg && is_dst_reg {
-                    instructions.push(stmt.clone())
-                } else {
-                    let src_reg = if is_src_reg { src_reg } else { assembly::Register::new("r10".to_string()) };
-                    let dst_reg = if is_dst_reg { dst_reg } else { assembly::Register::new("r11".to_string()) }; 
+                            assembly::Operand::Data(_) => unimplemented!(),
+                            assembly::Operand::Pseudo(_, _) | assembly::Operand::PseudoMem(_, _, _) => unreachable!("pseudo should have been removed by now"),
+                        }
+                    },
+                    assembly::Operand::Memory(dst_reg, offset) => {
+                        match src {
+                            assembly::Operand::Register(src_reg) => {
+                                instructions.push(assembly::Instruction::Str(
+                                    assembly::Operand::Register(src_reg.clone()),
+                                    *offset,
+                                    dst_reg.clone(),
+                                ));
+                            },
+                            assembly::Operand::Immediate(imm) => {
+                                instructions.push(assembly::Instruction::Ldi(
+                                    assembly::Operand::Register(assembly::Register::new("r10".to_string())),
+                                    imm.clone(),
+                                ));
+                                instructions.push(assembly::Instruction::Str(
+                                    assembly::Operand::Register(assembly::Register::new("r10".to_string())),
+                                    *offset,
+                                    dst_reg.clone(),
+                                ));
+                            }
+                            assembly::Operand::Memory(base_reg, off) => {
+                                instructions.push(assembly::Instruction::Lod(
+                                    base_reg.clone(),
+                                    *off,
+                                    assembly::Operand::Register(assembly::Register::new("r10".to_string())),
+                                ));
+                                instructions.push(assembly::Instruction::Str(
+                                    assembly::Operand::Register(assembly::Register::new("r10".to_string())),
+                                    *offset,
+                                    dst_reg.clone(),
+                                ));
+                            }
 
-                    if !is_src_reg { self.to_register(src, &src_reg, instructions) };
-
-                    instructions.push(assembly::Instruction::Mov(
-                        assembly::Operand::Register(src_reg),
-                        assembly::Operand::Register(dst_reg.clone())
-                    ));
-
-                    if is_dst_reg {
-                        return;
+                            assembly::Operand::Data(_) => unimplemented!(),
+                            assembly::Operand::Pseudo(_, _) | assembly::Operand::PseudoMem(_, _, _) => unreachable!("pseudo should have been removed by now"),
+                        }
                     }
 
-                    let (is_mem, reg, offset) = self.is_mem(dst);
-
-                    if is_mem {
-                        instructions.push(assembly::Instruction::Str(
-                            assembly::Operand::Register(dst_reg),
-                            offset,
-                            reg,
-                        ));
-                    } else {
-                        panic!("Invalid destination operand: {:?}", dst);
-                    }
+                    assembly::Operand::Data(_) => unimplemented!(),
+                    assembly::Operand::Immediate(_) => panic!("cant mov to immediate"),
+                    assembly::Operand::Pseudo(_, _) | assembly::Operand::PseudoMem(_, _, _) => unreachable!("pseudo should have been removed by now"),
                 }
             },
             assembly::Instruction::Unary(ref op, ref src, ref dst) => {
@@ -243,8 +282,6 @@ impl InstructionFixupPass {
                 self.to_register(op, &small_reg, instructions);
 
                 let reg = assembly::Operand::Register(small_reg);
-
-
 
                 instructions.push(assembly::Instruction::Adi(
                     reg.clone(),

@@ -95,3 +95,24 @@ impl Register {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct FunctionTable {
+    functions: std::collections::HashMap<String, Vec<Register>>,
+}
+
+impl FunctionTable {
+    pub fn new() -> FunctionTable {
+        FunctionTable {
+            functions: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, name: String, params: Vec<Register>) {
+        self.functions.insert(name, params);
+    }
+
+    pub fn lookup(&self, name: &String) -> Option<&Vec<Register>> {
+        self.functions.get(name)
+    }
+}
