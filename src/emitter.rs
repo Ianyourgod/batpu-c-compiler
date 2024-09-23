@@ -165,7 +165,7 @@ ret
     fn emit_as_register(&self, op: &assembly::Operand) -> String {
         match op {
             assembly::Operand::Register(ref reg) => self.emit_register(reg),
-            _ => panic!("Expected register, got {:?}", op),
+            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected register, got {:?}", op),
         }
     }
 

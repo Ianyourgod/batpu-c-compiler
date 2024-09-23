@@ -68,7 +68,7 @@ impl ReachingCopiesAnalysis {
             }
         }
 
-        panic!("Block not found");
+        unreachable!("INTERNAL ERROR. PLEASE REPORT: Block not found");
     }
 
     fn transfer(&mut self, node: &cfg::Node, initial_reaching_copies: &Annotation) {
@@ -134,7 +134,7 @@ impl ReachingCopiesAnalysis {
         for pred_id in block.get_predecessors() {
             match pred_id {
                 cfg::NodeID::ENTRY => return Vec::new(),
-                cfg::NodeID::EXIT => panic!("Mal formed CFG"),
+                cfg::NodeID::EXIT => unreachable!("INTERNAL ERROR. PLEASE REPORT: Mal formed CFG"),
                 cfg::NodeID::BlockID(_) => {
                     let pred_out_copies = self.annotations.get_block_annotation(&pred_id).unwrap().copies.clone();
                     incoming_copies = incoming_copies.into_iter().filter(|item| !pred_out_copies.contains(item)).collect();
@@ -196,7 +196,7 @@ impl ReachingCopiesAnalysis {
             if old_annotation != *self.annotations.get_block_annotation(block_id).unwrap() {
                 for succ_id in block.get_successors() {
                     match succ_id {
-                        cfg::NodeID::ENTRY => panic!("Mal formed CFG"),
+                        cfg::NodeID::ENTRY => unreachable!("INTERNAL ERROR. PLEASE REPORT: Mal formed CFG"),
                         cfg::NodeID::EXIT => continue,
                         cfg::NodeID::BlockID(_) => {
                             if !worklist.contains(&succ_id) {

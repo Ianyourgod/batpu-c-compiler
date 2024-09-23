@@ -130,7 +130,7 @@ impl ConvertPass {
             assembly::Operand::Immediate(_) => definition::Type::Int,
             assembly::Operand::Pseudo(_, ty) => ty.clone(),
             assembly::Operand::PseudoMem(_, _, ty) => definition::Type::Pointer(Box::new(ty.clone())),
-            _ => panic!("hey dont do that")
+            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: hey dont do that")
         }
     }
 
@@ -142,7 +142,7 @@ impl ConvertPass {
             definition::Type::Pointer(_) |
             definition::Type::Char => 1,
             definition::Type::Void => 0,
-            _ => panic!("hey dont do that")
+            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: hey dont do that")
         }
     }
 
@@ -436,8 +436,8 @@ impl ConvertPass {
                     }
                 }
             },
-            definition::Val::DereferencedPtr(_) => panic!("Dereferenced pointers should have been removed"),
-            definition::Val::SubObject(_, _) => panic!("Subobjects should have been removed"),
+            definition::Val::DereferencedPtr(_) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Dereferenced pointers should have been removed"),
+            definition::Val::SubObject(_, _) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Subobjects should have been removed"),
         }
     }
 

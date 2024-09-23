@@ -198,7 +198,7 @@ impl DeadStoreElimination {
         for succ_id in block.get_successors() {
             match succ_id {
                 cfg::NodeID::EXIT => continue,
-                cfg::NodeID::ENTRY => panic!("Malformed CFG"),
+                cfg::NodeID::ENTRY => unreachable!("INTERNAL ERROR. PLEASE REPORT: Malformed CFG"),
                 cfg::NodeID::BlockID(_) => {
                     let annotation = self.annotations.get_block_annotation(succ_id).unwrap();
                     for var in annotation.live.iter() {
@@ -243,7 +243,7 @@ impl DeadStoreElimination {
                 for pred_id in block.get_predecessors() {
                     match pred_id {
                         cfg::NodeID::ENTRY => continue,
-                        cfg::NodeID::EXIT => panic!("Mal formed CFG"),
+                        cfg::NodeID::EXIT => unreachable!("INTERNAL ERROR. PLEASE REPORT: Mal formed CFG"),
                         cfg::NodeID::BlockID(_) => {
                             if !worklist.contains(&pred_id) {
                                 worklist.push(pred_id.clone());
@@ -262,7 +262,7 @@ impl DeadStoreElimination {
             }
         }
 
-        panic!("Block not found");
+        unreachable!("INTERNAL ERROR. PLEASE REPORT: Block not found");
     }
 
     fn is_var(&self, src: &definition::Val) -> bool {

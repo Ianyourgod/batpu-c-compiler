@@ -70,7 +70,7 @@ impl TypeChecker {
 
         let (param_types, ret_type) = match &decl.ty {
             nodes::Type::Fn(args, ret) => (args, ret),
-            _ => panic!("Expected Fn, got {:?}", decl.ty),
+            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected Fn, got {:?}", decl.ty),
         };
 
         if let nodes::Type::Struct(ref tag) = **ret_type {

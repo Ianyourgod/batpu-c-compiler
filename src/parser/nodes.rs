@@ -188,9 +188,9 @@ impl Type {
         match self {
             Type::Int | Type::Pointer(_) | Type::Char => 1,
             Type::Array(ty, size) => ty.size() * size,
-            Type::Struct(_) => panic!("Struct types' size cannot be found through this method"),
+            Type::Struct(_) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Struct types' size cannot be found through this method"),
 
-            Type::Fn(_, _) => panic!("Function types should not be used in this context"),
+            Type::Fn(_, _) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Function types should not be used in this context"),
 
             Type::Void => 1, // void is weird
         }

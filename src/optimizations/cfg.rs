@@ -23,7 +23,7 @@ impl Node {
         match self {
             Node::BasicBlock(_, _, _, ref mut succs) |
             Node::Entry(_, ref mut succs)  => succs.push(succ.clone()),
-            Node::Exit(_, _) => panic!("Cannot add a successor to the exit node"),
+            Node::Exit(_, _) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Cannot add a successor to the exit node"),
         }
     }
 
@@ -31,7 +31,7 @@ impl Node {
         match self {
             Node::BasicBlock(_, _, ref mut preds, _) |
             Node::Exit(_, ref mut preds) => preds.push(pred),
-            Node::Entry(_, _) => panic!("Cannot add a predecessor to the entry node"),
+            Node::Entry(_, _) => unreachable!("Cannot add a predecessor to the entry node"),
         }
     }
 
@@ -39,7 +39,7 @@ impl Node {
         match self {
             Node::BasicBlock(_, _, _, succs) |
             Node::Entry(_, succs) => succs,
-            Node::Exit(_, _) => panic!("Cannot get successors of the exit node"),
+            Node::Exit(_, _) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Cannot get successors of the exit node"),
         }
     }
 
@@ -47,7 +47,7 @@ impl Node {
         match self {
             Node::BasicBlock(_, _, preds, _) |
             Node::Exit(_, preds) => preds,
-            Node::Entry(_, _) => panic!("Cannot get predecessors of the entry node"),
+            Node::Entry(_, _) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Cannot get predecessors of the entry node"),
         }
     }
 
@@ -62,7 +62,7 @@ impl Node {
     pub fn get_instructions(&self) -> Vec<definition::Instruction> {
         match self {
             Node::BasicBlock(_, instr, _, _) => instr.clone(),
-            _ => panic!("Expected basic block found {:?}", self),
+            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected basic block found {:?}", self),
         }
     }
 }
@@ -74,7 +74,7 @@ pub fn get_block_by_id(id: &NodeID, nodes: &Vec<Node>) -> Node {
         }
     }
 
-    panic!("Block not found: {:?}", id);
+    unreachable!("INTERNAL ERROR. PLEASE REPORT: Block not found: {:?}", id);
 }
 
 #[derive(Clone, Debug)]
@@ -187,7 +187,7 @@ fn get_block_id_by_label(label: &str, nodes: &Vec<Node>) -> NodeID {
         }
     }
 
-    panic!("Label not found");
+    unreachable!("INTERNAL ERROR. PLEASE REPORT: Label not found");
 }
 
 fn add_all_edges(nodes_vec: &Vec<Node>) -> Vec<Node> {

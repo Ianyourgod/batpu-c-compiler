@@ -171,7 +171,7 @@ impl InstructionFixupPass {
                     }
 
                     assembly::Operand::Data(_) => unimplemented!(),
-                    assembly::Operand::Immediate(_) => panic!("cant mov to immediate"),
+                    assembly::Operand::Immediate(_) => unreachable!("INTERNAL ERROR. PLEASE REPORT: cant mov to immediate"),
                     assembly::Operand::Pseudo(_, _) | assembly::Operand::PseudoMem(_, _, _) => unreachable!("pseudo should have been removed by now"),
                 }
             },
@@ -206,7 +206,7 @@ impl InstructionFixupPass {
                             reg,
                         ));
                     } else {
-                        panic!("Invalid destination operand: {:?}", dst);
+                        unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                     }
                 }
             },
@@ -245,7 +245,7 @@ impl InstructionFixupPass {
                             reg,
                         ));
                     } else {
-                        panic!("Invalid destination operand: {:?}", dst);
+                        unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                     }
                 }
             },
@@ -308,7 +308,7 @@ impl InstructionFixupPass {
                 if is_mem {
                     instructions.push(assembly::Instruction::Str(assembly::Operand::Register(dst_reg), offset, base_reg));
                 } else {
-                    panic!("Invalid destination operand: {:?}", dst);
+                    unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                 }
             }
             assembly::Instruction::Str(ref src, ref off, ref dst) => {
@@ -337,7 +337,7 @@ impl InstructionFixupPass {
 
                 let src = match src {
                     assembly::Operand::Memory(base_reg, offset) => (base_reg.clone(), *offset),
-                    _ => panic!("Invalid source operand: {:?}", src),
+                    _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid source operand: {:?}", src),
                 };
 
                 instructions.push(assembly::Instruction::Adi(
@@ -374,7 +374,7 @@ impl InstructionFixupPass {
                 if is_mem {
                     instructions.push(assembly::Instruction::Str(assembly::Operand::Register(dst_reg), offset, base_reg));
                 } else {
-                    panic!("Invalid destination operand: {:?}", dst);
+                    unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                 }
             },
             assembly::Instruction::Ldi(_, _) |

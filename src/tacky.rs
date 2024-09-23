@@ -31,7 +31,7 @@ impl Tacky {
 
                     let (global, init) = match table_entry.1 {
                         nodes::TableEntry::StaticAttr(ref init, global) => (global, init),
-                        _ => panic!("Expected StaticAttr, got {:?}", table_entry.1),
+                        _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected StaticAttr, got {:?}", table_entry.1),
                     };
 
                     let val = match init {
@@ -69,7 +69,7 @@ impl Tacky {
 
                     let global = match table_entry.1 {
                         nodes::TableEntry::FnAttr(_, global) => global,
-                        _ => panic!("Expected FnAttr, got {:?}", table_entry.1),
+                        _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected FnAttr, got {:?}", table_entry.1),
                     };
 
                     let func = definition::FuncDef {
@@ -467,7 +467,7 @@ impl Tacky {
             nodes::ExpressionEnum::Dot(ref expr, ref member) => {
                 let struct_tag = match &expr.ty {
                     nodes::Type::Struct(tag) => tag,
-                    _ => panic!("Expected struct type, got {:?}", expr.ty),
+                    _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected struct type, got {:?}", expr.ty),
                 };
                 let member_entry = self.type_table.lookup_member_entry(struct_tag, member).unwrap();
                 let member_offset = member_entry.offset as i16;
