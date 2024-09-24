@@ -895,11 +895,6 @@ impl Parser {
             let expr = self.parse_expression(0);
 
             return Some(nodes::Expression::new(nodes::ExpressionEnum::Cast(type_, Box::new(expr))));
-        } 
-
-        if self.current_token == TokenType::LParen {
-            self.next_token();
-            self.check_for_cast()
         } else { None }
     }
 }

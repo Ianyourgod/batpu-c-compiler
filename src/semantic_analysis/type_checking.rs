@@ -618,6 +618,7 @@ impl TypeChecker {
                         };
                     },
                     nodes::Binop::Equal | nodes::Binop::NotEqual => {
+                        #[allow(unused_variables)]
                         let common_type = if self.is_pointer_type(&left.ty) || self.is_pointer_type(&right.ty) {
                             self.get_common_pointer_type(&left, &right)
                         } else if self.is_arithmetic_type(&left.ty) && self.is_arithmetic_type(&right.ty) {
@@ -633,7 +634,7 @@ impl TypeChecker {
 
                         return nodes::Expression {
                             expr: nodes::ExpressionEnum::Binop(binop, Box::new(converted_left), Box::new(converted_right)),
-                            ty: common_type,
+                            ty: nodes::Type::Int,
                         };
                     },
                     _ => (),

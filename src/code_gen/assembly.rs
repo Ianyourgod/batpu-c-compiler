@@ -19,7 +19,7 @@ pub struct FuncDecl {
     pub global: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CondCode {
     Equal,
     NotEqual,
@@ -27,7 +27,7 @@ pub enum CondCode {
     LessThan,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     Mov(Operand, Operand),
     Ldi(Operand, i16),
@@ -52,13 +52,13 @@ pub enum Instruction {
     Lea(Operand, Operand),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Unop {
     Negate,
     BitwiseNot,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Operand {
     Immediate(i16),
     Register(Register),
@@ -68,14 +68,14 @@ pub enum Operand {
     Data(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Binop {
     Add,
     Subtract,
     Nor,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Register {
     pub name: String,
 }
