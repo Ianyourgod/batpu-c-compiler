@@ -9,7 +9,6 @@ pub struct Emitter {
 
 impl Emitter {
     pub fn new(program: assembly::Program) -> Emitter {
-        //println!("{:#?}", program);
         Emitter {
             program,
         }
@@ -126,6 +125,9 @@ ret
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
+                    if !func.defined {
+                        continue;
+                    }
                     if func.global {
                         output.push_str(":global\n");
                     }

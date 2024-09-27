@@ -48,22 +48,12 @@ impl Tacky {
                     ));
                 }
                 nodes::Declaration::FuncDecl(func) => {
-                    if func.body.len() == 0 {
-                        continue;
-                    }
-
                     let mut body: Vec<definition::Instruction> = Vec::new();
                     let mut params: Vec<(String, definition::Type)> = Vec::with_capacity(func.params.len());
                     
                     for param in &func.params {
                         params.push((param.clone(), self.symbol_table.lookup(&param).unwrap().0.clone()));
                     }
-                    
-                    for instr in &func.body {
-                        self.emit_block_item(instr, &mut body);
-                    }
-
-                    body.push(definition::Instruction::Return(None));
 
                     let table_entry = self.symbol_table.lookup(&func.name).unwrap();
 
@@ -72,11 +62,31 @@ impl Tacky {
                         _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected FnAttr, got {:?}", table_entry.1),
                     };
 
+                    if func.body.len() == 0 {
+                        let func = definition::FuncDef {
+                            name: func.name.clone(),
+                            params,
+                            body,
+                            global,
+                            defined: false,
+                        };
+    
+                        statements.push(definition::TopLevel::FuncDef(func));
+                        continue;
+                    }
+                    
+                    for instr in &func.body {
+                        self.emit_block_item(instr, &mut body);
+                    }
+
+                    body.push(definition::Instruction::Return(None));
+
                     let func = definition::FuncDef {
                         name: func.name.clone(),
                         params,
                         body,
                         global,
+                        defined: true,
                     };
 
                     statements.push(definition::TopLevel::FuncDef(func));

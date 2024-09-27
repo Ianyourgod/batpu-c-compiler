@@ -52,6 +52,7 @@ impl InstructionFixupPass {
             body: instrs,
             stack_size: func.stack_size,
             global: func.global,
+            defined: func.defined,
         };
 
         program.statements.push(assembly::TopLevel::FuncDef(func));

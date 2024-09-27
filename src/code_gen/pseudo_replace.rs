@@ -61,6 +61,7 @@ impl PseudoReplacePass {
             body: instrs,
             stack_size: context.stack_offset,
             global: func.global,
+            defined: func.defined,
         };
 
         program.statements.push(assembly::TopLevel::FuncDef(func));

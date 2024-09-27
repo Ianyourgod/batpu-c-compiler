@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{collections::HashMap, process::exit};
 
 mod lexer;
 mod parser;
@@ -164,17 +164,18 @@ fn compile(input_file: &String, args: Settings) -> String {
     //println!("{:#?}", program);
 
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
-    let mut program = tacky.emit();
+    let program = tacky.emit();
+    let aliased_vars = HashMap::new();
 
     //println!("{:#?}", program);
 
-    if !args.dont_optimize {
-        program = optimizations::optimize(program);
-    }
+    let (program, aliased_vars) = if !args.dont_optimize {
+        optimizations::optimize(program)
+    } else { (program, aliased_vars) };
 
     //println!("{:#?}", program);
 
-    let assembly = code_gen::convert(program, symbol_table, type_table);
+    let assembly = code_gen::convert(program, symbol_table, type_table, aliased_vars, !args.dont_optimize);
 
     //println!("{:#?}", assembly);
 

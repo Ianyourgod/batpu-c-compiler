@@ -17,6 +17,7 @@ pub struct FuncDecl {
     pub body: Vec<Instruction>,
     pub stack_size: i16,
     pub global: bool,
+    pub defined: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,7 +59,7 @@ pub enum Unop {
     BitwiseNot,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Operand {
     Immediate(i16),
     Register(Register),
@@ -75,7 +76,7 @@ pub enum Binop {
     Nor,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Register {
     pub name: String,
 }

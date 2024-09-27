@@ -227,8 +227,6 @@ impl Parser {
     fn parse_types(&mut self) -> Vec<TokenType> {
         let mut types: Vec<TokenType> = Vec::new();
 
-        //println!("{:?}", self.current_token);
-
         while self.is_valid_var_starter(&self.current_token) {
             if self.current_token == TokenType::Keyword("struct".to_string()) {
                 self.next_token();
@@ -310,8 +308,6 @@ impl Parser {
 
     fn parse_declaration(&mut self) -> nodes::Declaration {
         let types = self.parse_types();
-
-        //println!("types: {:?}", types);
 
         if types[0] == TokenType::Keyword("struct".to_string()) {
             let (tag, t1_is_ident) = match types.get(1) {

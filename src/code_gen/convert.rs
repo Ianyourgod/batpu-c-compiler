@@ -63,6 +63,7 @@ impl ConvertPass {
             body: instrs,
             stack_size: offset,
             global: func.global,
+            defined: func.defined
         };
 
         program.statements.push(assembly::TopLevel::FuncDef(func));

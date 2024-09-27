@@ -77,23 +77,23 @@ impl TypeChecker {
             panic!("Cant send structs as ret type rn (tag = {})", tag);
         }
 
-        let body = if has_body {
-            for (idx, param) in decl.params.iter().enumerate() {
-                let param_type = &param_types[idx];
+        for (idx, param) in decl.params.iter().enumerate() {
+            let param_type = &param_types[idx];
 
-                if let nodes::Type::Struct(_) = param_type {
-                    panic!("Cant send structs as params rn");
-                }
-
-                if !self.is_complete_type(param_type) {
-                    panic!("Incomplete type in function parameter");
-                }
-        
-                self.validate_type_specifier(param_type);
-
-                self.symbol_table.insert(param.clone(), (param_type.clone(), nodes::TableEntry::LocalAttr));
+            if let nodes::Type::Struct(_) = param_type {
+                panic!("Cant send structs as params rn");
             }
 
+            if !self.is_complete_type(param_type) {
+                panic!("Incomplete type in function parameter");
+            }
+    
+            self.validate_type_specifier(param_type);
+
+            self.symbol_table.insert(param.clone(), (param_type.clone(), nodes::TableEntry::LocalAttr));
+        }
+
+        let body = if has_body {
             let body = match self.typecheck_block(&decl.body, &ret_type) {
                 nodes::Statement::Compound(body) => body,
                 _ => unreachable!()
