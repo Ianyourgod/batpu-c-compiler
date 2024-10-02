@@ -251,11 +251,10 @@ impl ReachingCopiesAnalysis {
                 let new_args = args.iter().map(|arg| self.replace_operand(arg, reaching_copies)).collect();
                 return Some(definition::Instruction::FunCall(name.clone(), new_args, dst.clone(), *globle));
             }
-            definition::Instruction::AddPtr(src1, src2, src3, dst) => {
+            definition::Instruction::AddPtr(src1, src2, offset, dst) => {
                 let new_src1 = self.replace_operand(src1, reaching_copies);
                 let new_src2 = self.replace_operand(src2, reaching_copies);
-                let new_src3 = self.replace_operand(src3, reaching_copies);
-                return Some(definition::Instruction::AddPtr(new_src1, new_src2, new_src3, dst.clone()));
+                return Some(definition::Instruction::AddPtr(new_src1, new_src2, *offset, dst.clone()));
             } 
             definition::Instruction::CopyFromOffset(var, offset, val) => {
                 let new_val = self.replace_operand(val, reaching_copies);

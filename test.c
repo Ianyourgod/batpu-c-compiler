@@ -67,27 +67,92 @@ static int main() {
 }
 */
 
-static void mem_write(int addr, int val);
+/*
+#define TOKEN_EOF 1
+#define TOKEN_INT 2
+#define TOKEN_ADD 3
+#define TOKEN_SUB 4
+#define TOKEN_MUL 5
+#define TOKEN_DIV 6
+#define TOKEN_LPAREN 7
+#define TOKEN_RPAREN 8
 
-static void draw_pixel(int x, int y) {
-    mem_write(240, x);
-    mem_write(241, y);
-    mem_write(242, 1);
+static void exit(int code);
+static void* malloc(int size);
+
+struct Lexer {
+    int position;
+    char* input;
+};
+
+struct Token {
+    int type;
+    char* value;
+};
+
+
+static int isdigit(char ch) {
+    return ch == '1' || ch == '2';
 }
 
-static void draw_buffer() {
-    mem_write(245, 1);
-}
+static struct Token* lexer_get_next_token(struct Lexer* self) {
+    char* val = malloc(2);
+    struct Token* token = malloc(sizeof (struct Token));
+    token->type = TOKEN_EOF;
+    token->value = val;
 
-static void clear_buffer() {
-    mem_write(246, 1);
+    while (self->input[self->position] != '\0') {
+        if (isdigit(self->input[self->position])) {
+            token->type = TOKEN_INT;
+            while (isdigit(self->input[self->position])) {
+                if (self->position != 0) {
+                    exit(((int) (self->input[self->position])) + self->position);
+                }
+                token->value[0] = self->input[self->position];
+                self->position = self->position + 1;
+            }
+            break;
+        }
+        if (self->input[self->position] == '+') {
+            token->type = TOKEN_ADD;
+            self->position++;
+            break;
+        }
+    }
+
+    return token;
 }
 
 static int main() {
-    clear_buffer();
-    for (int i = 0; i < 10; i++) {
-        draw_pixel(i, i);
-    }
-    draw_buffer();
-    return 0;
+    char input[2] = { '1', '\0' };
+    struct Lexer lexa = { 0, input };
+
+    lexer_get_next_token(&lexa);
+
+    return lexer_get_next_token(&lexa)->type;
+}
+*/
+
+static void i_do_nothing() {
+    return;
+}
+
+static int four() {
+    return 4;
+}
+
+static int i_do_something() {
+    int a = four();
+    i_do_nothing();
+    return a;
+}
+
+static int three() {
+    return 3;
+}
+
+static int main() {
+    int la_di_da_di_da = three();
+    i_do_something();
+    return la_di_da_di_da;
 }

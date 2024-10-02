@@ -36,7 +36,7 @@ pub enum Instruction {
     Store(Val, Val),
     CopyToOffset(Val, Val, i16), // val, var, offset
     CopyFromOffset(Val, i16, Val), // var, offset, val
-    AddPtr(Val, Val, Val, Val), // val, val, offset, dest
+    AddPtr(Val, Val, i16, Val), // val, val, offset, dest
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

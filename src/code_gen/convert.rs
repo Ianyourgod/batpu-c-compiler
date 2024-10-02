@@ -196,6 +196,7 @@ impl ConvertPass {
                     self.convert_val(val),
                     assembly::Operand::Register(assembly::Register::new("r1".to_string()))
                 ));
+
                 instructions.push(assembly::Instruction::Return);
             },
             definition::Instruction::Unary(ref op, ref src, ref dst) => {
@@ -351,6 +352,7 @@ impl ConvertPass {
             },
             definition::Instruction::Load(ref src, ref dst) => {
                 let src = self.convert_val(src);
+
                 instructions.push(assembly::Instruction::Mov(
                     src,
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
@@ -400,27 +402,47 @@ impl ConvertPass {
                 ));
             },
             definition::Instruction::AddPtr(ref val1, ref val2, ref offset, ref dst) => {
-                // mult val2 and offset by calling "__mult"
                 let val1 = self.convert_val(val1);
                 let val2 = self.convert_val(val2);
-                let offset = self.convert_val(offset);
                 let dst = self.convert_val(dst);
+
+                let is_const_v2 = self.is_const(&val2);
+
+                if is_const_v2.0 {
+                    let multed = offset * is_const_v2.1;
+
+                    instructions.push(assembly::Instruction::Binary(
+                        assembly::Binop::Subtract,
+                        val1,
+                        assembly::Operand::Immediate(multed),
+                        dst
+                    ));
+                    return;
+                }
+
                 instructions.push(assembly::Instruction::Mov(
                     val2,
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
                 ));
-                instructions.push(assembly::Instruction::Mov(
-                    offset,
+                instructions.push(assembly::Instruction::Ldi(
                     assembly::Operand::Register(assembly::Register::new("r2".to_string())),
+                    *offset
                 ));
                 instructions.push(assembly::Instruction::Call("__mult".to_string(), false));
                 instructions.push(assembly::Instruction::Binary(
-                    assembly::Binop::Add,
+                    assembly::Binop::Subtract,
                     val1,
                     assembly::Operand::Register(assembly::Register::new("r1".to_string())),
                     dst
                 ));
             },
+        }
+    }
+
+    fn is_const(&self, val: &assembly::Operand) -> (bool, i16) {
+        match val {
+            assembly::Operand::Immediate(v) => (true, *v),
+            _ => (false, 0)
         }
     }
 

@@ -6,51 +6,57 @@ use std::collections::HashMap;
 
 use super::assembly;
 
-pub fn register_allocation(functions: assembly::Program, function_table: assembly::FunctionTable, aliased: HashMap<String, Vec<String>>) -> assembly::Program {
+pub fn register_allocation(functions: assembly::Program, function_table: assembly::FunctionTable, aliased: HashMap<String, Vec<String>>) -> (assembly::Program, HashMap<String, Vec<assembly::Register>>) {
     let mut transformed_functions = Vec::new();
+    let mut callee_saved = HashMap::new();
+
     for tl in functions.statements {
         match tl {
             assembly::TopLevel::FuncDef(func) => {
                 let aliased = aliased.get(&func.name).unwrap();
+                let name = func.name.clone();
 
-                let transformed_instructions = allocate_registers(func, &function_table, aliased);
+                let (transformed_instructions, cles) = allocate_registers(func, &function_table, aliased);
+
+                callee_saved.insert(name, cles);
+
                 transformed_functions.push(assembly::TopLevel::FuncDef(transformed_instructions));
             }
             assembly::TopLevel::StaticVariable(_, _, _) => transformed_functions.push(tl),
         }
     }
-    assembly::Program {
+    
+    (assembly::Program {
         statements: transformed_functions,
-    }
+    }, callee_saved)
 }
 
-pub fn allocate_registers(instructions: assembly::FuncDecl, function_table: &assembly::FunctionTable, aliased: &Vec<String>) -> assembly::FuncDecl {
+pub fn allocate_registers(instructions: assembly::FuncDecl, function_table: &assembly::FunctionTable, aliased: &Vec<String>) -> (assembly::FuncDecl, Vec<assembly::Register>) {
     if !instructions.defined {
-        return instructions;
+        return (instructions, vec![]);
     }
 
     let (mut interference_graph, liveness_analysis) = build_graph(&instructions, function_table, aliased);
-    add_spill_costs(&mut interference_graph, &instructions, liveness_analysis);
+    add_spill_costs(&mut interference_graph, &instructions, liveness_analysis, aliased);
     
     color_graph::color_graph(&mut interference_graph);
 
-    #[allow(unused_variables)]
     let (register_map, callee_saved) = create_register_map(&interference_graph);
 
     let transformed_instructions = replace_pseudoregs(&instructions.body, register_map);
     
-    assembly::FuncDecl {
+    (assembly::FuncDecl {
         name: instructions.name,
         body: transformed_instructions,
         stack_size: instructions.stack_size,
         global: instructions.global,
         defined: true
-    }
+    }, callee_saved)
 }
 
-fn add_spill_costs(interference_graph: &mut Graph, instructions: &assembly::FuncDecl, liveness: liveness::LivenessAnalysis) {
+fn add_spill_costs(interference_graph: &mut Graph, instructions: &assembly::FuncDecl, liveness: liveness::LivenessAnalysis, aliased: &Vec<String>) {
     for instruction in &instructions.body {
-        let (used, updated) = liveness.find_used_and_updated(instruction);
+        let (used, updated) = liveness.find_used_and_updated(instruction, aliased);
 
         for u in used {
             let node = interference_graph.nodes.get_mut(&u).unwrap();
@@ -96,7 +102,7 @@ fn build_graph(instructions: &assembly::FuncDecl, function_table: &assembly::Fun
 
     let cfg = cfg::create_cfg(&instructions.body);
 
-    let mut liveness_analysis = liveness::LivenessAnalysis::new(cfg.clone(), function_table.clone());
+    let mut liveness_analysis = liveness::LivenessAnalysis::new(cfg.clone(), function_table.clone(), aliased.clone());
     liveness_analysis.analyze_and_add_edges(&mut interference_graph);
     
     (interference_graph, liveness_analysis)
@@ -237,7 +243,7 @@ fn create_register_map(graph: &Graph) -> (HashMap<String, assembly::Register>, V
                 if node.1.color.is_some() {
                     let hardreg = color_map.get(&node.1.color.unwrap()).unwrap();
                     register_map.insert(name.clone(), (*hardreg).clone());
-                    if is_callee_saved(hardreg) {
+                    if is_callee_saved(hardreg) && !callee_saved_regs.contains(*hardreg) {
                         callee_saved_regs.push((*hardreg).clone());
                     }
                 }
@@ -259,12 +265,13 @@ fn is_callee_saved(reg: &assembly::Register) -> bool {
     }
 }
 
-fn replace_operand(operand: &assembly::Operand, register_map: &HashMap<String, assembly::Register>) -> assembly::Operand {
+fn replace_operand(operand: &assembly::Operand, register_map: &HashMap<String, assembly::Register>, instructions: &mut Vec<assembly::Instruction>) -> assembly::Operand {
     match operand {
         assembly::Operand::Pseudo(name, _) => {
             if register_map.contains_key(name) {
                 let reg = register_map.get(name).unwrap().clone();
                 //println!("Replacing {} with {:?}", name, reg);
+                instructions.push(assembly::Instruction::Comment(format!("Replacing {} with {}", name, reg.name)));
                 assembly::Operand::Register(reg)
             } else {
                 operand.clone()
@@ -275,54 +282,55 @@ fn replace_operand(operand: &assembly::Operand, register_map: &HashMap<String, a
 }
 
 fn replace_pseudoregs(instructions: &Vec<assembly::Instruction>, register_map: HashMap<String, assembly::Register>) -> Vec<assembly::Instruction> {
-    let mut new_instructions = Vec::with_capacity(instructions.len());
+    let mut new_instructions = Vec::with_capacity(instructions.len()*2);
     
     for instruction in instructions {
-        new_instructions.push(match instruction {
+        new_instructions.push(assembly::Instruction::Comment(format!("Original: {:?}", instruction)));
+        let instr = match instruction {
             assembly::Instruction::Adi(op, imm) => {
-                assembly::Instruction::Adi(replace_operand(op, &register_map), *imm)
+                assembly::Instruction::Adi(replace_operand(op, &register_map, &mut new_instructions), *imm)
             }
             assembly::Instruction::Binary(bin, op1, op2, dest) => {
-                let op1 = replace_operand(op1, &register_map);
-                let op2 = replace_operand(op2, &register_map);
-                let dst = replace_operand(dest, &register_map);
+                let op1 = replace_operand(op1, &register_map, &mut new_instructions);
+                let op2 = replace_operand(op2, &register_map, &mut new_instructions);
+                let dst = replace_operand(dest, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Binary(bin.clone(), op1, op2, dst)
             }
             assembly::Instruction::Cmp(op1, op2) => {
-                let op1 = replace_operand(op1, &register_map);
-                let op2 = replace_operand(op2, &register_map);
+                let op1 = replace_operand(op1, &register_map, &mut new_instructions);
+                let op2 = replace_operand(op2, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Cmp(op1, op2)
             }
             assembly::Instruction::Ldi(op, imm) => {
-                assembly::Instruction::Ldi(replace_operand(op, &register_map), *imm)
+                assembly::Instruction::Ldi(replace_operand(op, &register_map, &mut new_instructions), *imm)
             }
             assembly::Instruction::Lea(src, dst) => {
                 // we dont replace src
-                let dst = replace_operand(dst, &register_map);
+                let dst = replace_operand(dst, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Lea(src.clone(), dst)
             }
             assembly::Instruction::Mov(src, dst) => {
-                let src = replace_operand(src, &register_map);
-                let dst = replace_operand(dst, &register_map);
+                let src = replace_operand(src, &register_map, &mut new_instructions);
+                let dst = replace_operand(dst, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Mov(src, dst)
             }
             assembly::Instruction::Lod(reg, off, dst) => {
-                let dst = replace_operand(dst, &register_map);
+                let dst = replace_operand(dst, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Lod(reg.clone(), off.clone(), dst.clone())
             }
             assembly::Instruction::Str(val, off, reg) => {
-                let val = replace_operand(val, &register_map);
+                let val = replace_operand(val, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Str(val, off.clone(), reg.clone())
             }
             assembly::Instruction::Unary(unop, op, dst) => {
-                let op = replace_operand(op, &register_map);
-                let dst = replace_operand(dst, &register_map);
+                let op = replace_operand(op, &register_map, &mut new_instructions);
+                let dst = replace_operand(dst, &register_map, &mut new_instructions);
 
                 assembly::Instruction::Unary(unop.clone(), op, dst)
             }
@@ -334,7 +342,9 @@ fn replace_pseudoregs(instructions: &Vec<assembly::Instruction>, register_map: H
             assembly::Instruction::Label(_) |
             assembly::Instruction::Call(_, _) |
             assembly::Instruction::Return => instruction.clone(),
-        });
+        };
+
+        new_instructions.push(instr);
     }
 
     new_instructions

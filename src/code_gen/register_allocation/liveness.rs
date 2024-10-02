@@ -36,24 +36,28 @@ pub struct LivenessAnalysis {
     cfg: cfg::CFG,
     annotations: Annotations,
     function_table: assembly::FunctionTable,
+    aliased: Vec<String>,
 }
 
 impl LivenessAnalysis {
-    pub fn new(cfg: cfg::CFG, function_table: assembly::FunctionTable) -> LivenessAnalysis {
+    pub fn new(cfg: cfg::CFG, function_table: assembly::FunctionTable, aliased: Vec<String>) -> LivenessAnalysis {
         return LivenessAnalysis {
             cfg,
             annotations: Annotations::new(),
             function_table,
+            aliased
         }
     }
 
     pub fn analyze_and_add_edges(&mut self, interference_graph: &mut super::Graph) {
-        self.find_deadness();
+        let aliased = self.aliased.clone();
 
-        self.add_edges(interference_graph);
+        self.find_deadness(&aliased);
+
+        self.add_edges(interference_graph, &aliased);
     }
 
-    pub fn find_deadness(&mut self) {
+    pub fn find_deadness(&mut self, aliased: &Vec<String>) {
         let graph = &self.cfg;
 
         let mut worklist = Vec::new();
@@ -79,7 +83,7 @@ impl LivenessAnalysis {
             let old_annotation = self.annotations.get_block_annotation(&block_id).unwrap().clone();
             let incoming_copies = self.meet(&block);
 
-            self.transfer(&block, &incoming_copies);
+            self.transfer(&block, &incoming_copies, aliased);
 
             if old_annotation != *self.annotations.get_block_annotation(&block_id).unwrap() {
                 for pred_id in block.get_predecessors() {
@@ -122,39 +126,82 @@ impl LivenessAnalysis {
         return live_registers;
     }
 
-    fn handle_ops(&self, read: &Vec<assembly::Operand>, updated: &Vec<assembly::Operand>) -> (Vec<assembly::Operand>, Vec<assembly::Operand>) {
+    fn is_stack_reg(&self, op: &assembly::Operand) -> bool {
+        match op {
+            assembly::Operand::Register(r) => {
+                match r.name.as_str() {
+                    "r14" |
+                    "rsp" |
+                    "r15" |
+                    "rbp" => true,
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_ops(&self, read: &Vec<assembly::Operand>, updated: &Vec<assembly::Operand>, aliased: &Vec<String>) -> (Vec<assembly::Operand>, Vec<assembly::Operand>) {
         let mut new_read = Vec::new();
         let mut new_updated = Vec::new();
 
         for r in read {
+            if self.is_stack_reg(r) {
+                continue;
+            }
+
             match r {
                 assembly::Operand::Memory(reg, _) => {
                     new_read.push(assembly::Operand::Register(reg.clone()));
                 }
-                assembly::Operand::Register(_) |
-                assembly::Operand::Pseudo(_, _) |
-                assembly::Operand::PseudoMem(_, _, _) => {
+                assembly::Operand::Register(_) => {
                     new_read.push(r.clone());
                 }
 
-                assembly::Operand::Immediate(_) => continue,
+                assembly::Operand::Pseudo(name, ty) => {
+                    if aliased.contains(name) {
+                        continue;
+                    }
+
+                    match ty {
+                        assembly::Type::Struct(_) => continue,
+                        _ => new_read.push(r.clone())
+                    }
+                }
+
+                assembly::Operand::Immediate(_) |
+                assembly::Operand::PseudoMem(_, _, _) => continue,
 
                 assembly::Operand::Data(_) => unreachable!("erm what the skibma")
             }
         }
 
         for u in updated {
+            if self.is_stack_reg(u) {
+                continue;
+            }
+
             match u {
                 assembly::Operand::Memory(reg, _) => {
                     new_read.push(assembly::Operand::Register(reg.clone()));
                 }
-                assembly::Operand::Register(_) |
-                assembly::Operand::Pseudo(_, _) |
-                assembly::Operand::PseudoMem(_, _, _) => {
+                assembly::Operand::Register(_) => {
                     new_updated.push(u.clone());
                 }
 
-                assembly::Operand::Immediate(_) => continue,
+                assembly::Operand::Pseudo(name, ty) => {
+                    if aliased.contains(name) {
+                        continue;
+                    }
+
+                    match ty {
+                        assembly::Type::Struct(_) => continue,
+                        _ => new_updated.push(u.clone())
+                    }
+                }
+
+                assembly::Operand::Immediate(_) |
+                assembly::Operand::PseudoMem(_, _, _) => continue,
 
                 assembly::Operand::Data(_) => unreachable!("erm what the skibma")
             }
@@ -163,7 +210,7 @@ impl LivenessAnalysis {
         return (new_read, new_updated);
     }
 
-    pub fn find_used_and_updated(&self, instruction: &assembly::Instruction) -> (Vec<assembly::Operand>, Vec<assembly::Operand>) {
+    pub fn find_used_and_updated(&self, instruction: &assembly::Instruction, aliased: &Vec<String>) -> (Vec<assembly::Operand>, Vec<assembly::Operand>) {
         let (used, updated) = match instruction {
             assembly::Instruction::Adi(src, _) => {
                 (vec![src.clone()], vec![src.clone()])
@@ -226,7 +273,7 @@ impl LivenessAnalysis {
             assembly::Instruction::Return => (vec![], vec![])
         };
 
-        return self.handle_ops(&used, &updated);
+        return self.handle_ops(&used, &updated, aliased);
     }
 
     fn is_register(&self, operand: &assembly::Operand) -> bool {
@@ -237,7 +284,7 @@ impl LivenessAnalysis {
         }
     }
 
-    fn transfer(&mut self, block: &cfg::Node, end_live_registers: &HashSet<assembly::Operand>) {
+    fn transfer(&mut self, block: &cfg::Node, end_live_registers: &HashSet<assembly::Operand>, aliased: &Vec<String>) {
         let mut current_live_registers = end_live_registers.clone();
 
         let instructions = block.get_instructions();
@@ -249,7 +296,7 @@ impl LivenessAnalysis {
                 live: current_live_registers.clone()
             });
 
-            let (used, updated) = self.find_used_and_updated(instruction);
+            let (used, updated) = self.find_used_and_updated(instruction, aliased);
 
             for u in updated {
                 if self.is_register(&u) {
@@ -280,7 +327,7 @@ impl LivenessAnalysis {
         graph.nodes.contains_key(node)
     }
 
-    fn add_edges(&mut self, interference_graph: &mut super::Graph) {
+    fn add_edges(&mut self, interference_graph: &mut super::Graph, aliased: &Vec<String>) {
         for node in &self.cfg.nodes {
             match node {
                 cfg::Node::Entry(_, _) |
@@ -288,7 +335,7 @@ impl LivenessAnalysis {
 
                 cfg::Node::BasicBlock(_, instructions, _, _) => {
                     for (i, instr) in instructions.iter().enumerate() {
-                        let (_, updated) = self.find_used_and_updated(instr);
+                        let (_, updated) = self.find_used_and_updated(instr, aliased);
                         let live_registers = self.annotations.get_instruction_annotation(&(node.get_id(), i)).unwrap().live.clone();
 
                         for l in &live_registers {

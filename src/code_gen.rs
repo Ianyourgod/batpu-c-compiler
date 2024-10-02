@@ -18,11 +18,11 @@ pub fn convert(program: definition::Program, type_table: SymbolTable, struct_tab
     #[allow(unused_variables)]
     let (program, function_table) = convert_pass.generate();
 
-    //println!("{:#?}", program);
+    //println!("{:#?}", program.statements.get(7));
 
-    let program = if optimize {
+    let (program, callee_saved) = if optimize {
         register_allocation::register_allocation(program, function_table, aliased)
-    } else { program };
+    } else { (program, HashMap::new()) };
 
     let mut pseudo_pass = pseudo_replace::PseudoReplacePass::new(program, type_table, struct_table);
 
@@ -30,7 +30,7 @@ pub fn convert(program: definition::Program, type_table: SymbolTable, struct_tab
 
     //println!("{:#?}", pseudo_program);
 
-    let instr_fixup_pass = instr_fixup::InstructionFixupPass::new(pseudo_program);
+    let mut instr_fixup_pass = instr_fixup::InstructionFixupPass::new(pseudo_program, callee_saved);
     let fixup_program = instr_fixup_pass.generate();
 
     //println!("{:#?}", fixup_program);

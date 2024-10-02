@@ -309,6 +309,10 @@ impl Parser {
     fn parse_declaration(&mut self) -> nodes::Declaration {
         let types = self.parse_types();
 
+        if types.is_empty() {
+            panic!("Expected declaration, found {:?}", self.current_token);
+        }
+
         if types[0] == TokenType::Keyword("struct".to_string()) {
             let (tag, t1_is_ident) = match types.get(1) {
                 Some(TokenType::Identifier(tag)) => (tag.clone(), true),
@@ -693,7 +697,8 @@ impl Parser {
                         Box::new(expr.clone()),
                         Box::new(nodes::Expression::new(
                             nodes::ExpressionEnum::Binop(
-                                is_op_assign.1,Box::new(expr),
+                                is_op_assign.1,
+                                Box::new(expr),
                                 Box::new(self.parse_expression(prec))
                             )
                         ))

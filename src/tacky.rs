@@ -381,18 +381,56 @@ impl Tacky {
                 }
             }
             nodes::ExpressionEnum::Increment(ref expr) => {
-                let lval = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
+                let lval = self.emit_expression(&expr.expr, body, &expr.ty);
 
-                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), lval.clone()));
-
-                lval
+                match lval {
+                    definition::Val::DereferencedPtr(ref ptr) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::Load(*ptr.clone(), dest.clone()));
+                        body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), dest.clone()));
+                        body.push(definition::Instruction::Store(dest.clone(), *ptr.clone()));
+                        return dest;
+                    }
+                    definition::Val::SubObject((var, ty), offset) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::CopyFromOffset(definition::Val::Var(var.clone(), ty.clone()), offset, dest.clone()));
+                        body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), dest.clone()));
+                        body.push(definition::Instruction::CopyToOffset(dest.clone(), definition::Val::Var(var.clone(), ty.clone()), offset));
+                        return dest;
+                    }
+                    _ => {
+                        body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(1), lval.clone()));
+                        return lval;
+                    }
+                }
             }
             nodes::ExpressionEnum::Decrement(ref expr) => {
                 let lval = self.emit_expression(&expr.expr, body, &expr.ty);
 
-                body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), lval.clone()));
-
-                lval
+                match lval {
+                    definition::Val::DereferencedPtr(ref ptr) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::Load(*ptr.clone(), dest.clone()));
+                        body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), dest.clone()));
+                        body.push(definition::Instruction::Store(dest.clone(), *ptr.clone()));
+                        return dest;
+                    }
+                    definition::Val::SubObject((var, ty), offset) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::CopyFromOffset(definition::Val::Var(var.clone(), ty.clone()), offset, dest.clone()));
+                        body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), dest.clone()));
+                        body.push(definition::Instruction::CopyToOffset(dest.clone(), definition::Val::Var(var.clone(), ty.clone()), offset));
+                        return dest;
+                    }
+                    _ => {
+                        body.push(definition::Instruction::Unary(definition::Unop::AddImm, definition::Val::Const(-1), lval.clone()));
+                        return lval;
+                    }
+                }
             }
             nodes::ExpressionEnum::FunctionCall(ref ident, ref args) => {
                 let mut arg_vals = Vec::new();
@@ -431,8 +469,9 @@ impl Tacky {
                     definition::Val::SubObject(var, offset) => {
                         let dest_name = self.make_temporary();
                         let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+
                         body.push(definition::Instruction::GetAddress(definition::Val::Var(var.0, var.1), dest.clone()));
-                        body.push(definition::Instruction::AddPtr(dest.clone(), definition::Val::Const(offset as i16), definition::Val::Const(1), dest.clone()));
+                        body.push(definition::Instruction::AddPtr(dest.clone(), definition::Val::Const(offset as i16), 1, dest.clone()));
                         dest
                     },
                     _ => {
@@ -451,7 +490,7 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                 
-                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), definition::Val::Const(ty.size() as i16), dest.clone()));
+                body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), ty.size() as i16, dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
             nodes::ExpressionEnum::CharLiteral(ch) => {
@@ -490,7 +529,7 @@ impl Tacky {
                         let dest_name = self.make_temporary();
                         let dest = definition::Val::Var(dest_name.clone(), ty.clone());
                         
-                        body.push(definition::Instruction::AddPtr(*ptr, definition::Val::Const(member_offset as i16), definition::Val::Const(1), dest.clone()));
+                        body.push(definition::Instruction::AddPtr(*ptr, definition::Val::Const(member_offset as i16), 1, dest.clone()));
 
                         definition::Val::DereferencedPtr(Box::new(dest))
                     }
@@ -515,7 +554,7 @@ impl Tacky {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), ty.clone());
 
-                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(-member_offset as i16), definition::Val::Const(1), dest.clone()));
+                body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i16), 1, dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
         }

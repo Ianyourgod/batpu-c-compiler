@@ -161,13 +161,13 @@ fn compile(input_file: &String, args: Settings) -> String {
     #[allow(unused_variables)]
     let (program, symbol_table, type_table) = semantic_analysis::resolve(program);
 
-    //println!("{:#?}", program);
+    //println!("{:#?}", program.statements.get(9));
 
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
     let program = tacky.emit();
     let aliased_vars = HashMap::new();
 
-    //println!("{:#?}", program);
+    //println!("{:#?}", program.statements.get(7));
 
     let (program, aliased_vars) = if !args.dont_optimize {
         optimizations::optimize(program)

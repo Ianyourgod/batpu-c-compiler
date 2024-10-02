@@ -118,16 +118,13 @@ impl DeadStoreElimination {
                         }
                     }
                 }
-                definition::Instruction::AddPtr(val1, val2, offset, dst) => {
+                definition::Instruction::AddPtr(val1, val2, _, dst) => {
                     current_live_variables.live.remove(dst);
                     if self.is_var(val1) {
                         current_live_variables.live.insert(val1.clone());
                     }
                     if self.is_var(val2) {
                         current_live_variables.live.insert(val2.clone());
-                    }
-                    if self.is_var(offset) {
-                        current_live_variables.live.insert(offset.clone());
                     }
                 }
                 definition::Instruction::Copy(dst, src) => {
@@ -143,8 +140,11 @@ impl DeadStoreElimination {
                         }
                     }
                 }
-                definition::Instruction::Unary(_, src, dst) => {
-                    current_live_variables.live.remove(dst);
+                definition::Instruction::Unary(unop, src, dst) => {
+                    if unop != &definition::Unop::AddImm {
+                        current_live_variables.live.remove(dst);
+                    }
+
                     if self.is_var(src) {
                         current_live_variables.live.insert(src.clone());
                     }

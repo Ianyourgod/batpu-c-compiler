@@ -6,42 +6,76 @@ pub struct InstructionFixupPass {
     program: assembly::Program,
     static_table: HashMap<String, u8>,
     static_counter: u8,
+    callee_saved: HashMap<String, Vec<assembly::Register>>,
+    current_callee_saved_regs: (Vec<(assembly::Operand, i16)>, i16),
 }
 
 impl InstructionFixupPass {
-    pub fn new(program: assembly::Program) -> InstructionFixupPass {
+    pub fn new(program: assembly::Program, callee_saved: HashMap<String, Vec<assembly::Register>>) -> InstructionFixupPass {
         InstructionFixupPass {
             program,
             static_table: HashMap::new(),
             static_counter: 0,
+            callee_saved,
+            current_callee_saved_regs: (vec![], 0),
         }
     }
 
-    pub fn generate(&self) -> assembly::Program {
-
+    pub fn generate(&mut self) -> assembly::Program {
         let mut assembly = assembly::Program {
             statements: Vec::new(),
         };
 
-        for stmt in &self.program.statements {
+        for stmt in self.program.statements.clone() {
             let stmt = match stmt {
                 assembly::TopLevel::FuncDef(func) => func,
                 assembly::TopLevel::StaticVariable(name, global, init) => {
-                    assembly.statements.push(assembly::TopLevel::StaticVariable(name.clone(), *global, init.clone()));
+                    assembly.statements.push(assembly::TopLevel::StaticVariable(name, global, init));
                     continue;
                 },
             };
 
-            self.generate_function(stmt, &mut assembly);
+            let callee_saved = if self.callee_saved.is_empty() {
+                vec![]
+            } else { self.callee_saved.get(&stmt.name).unwrap().clone() };
+
+            self.generate_function(&stmt, &mut assembly, &callee_saved);
         }
 
         assembly
     }
 
-    fn generate_function(&self, func: &assembly::FuncDecl, program: &mut assembly::Program) {
-        let mut instrs: Vec<assembly::Instruction> = Vec::new();
+    fn generate_function(&mut self, func: &assembly::FuncDecl, program: &mut assembly::Program, callee_saved: &Vec<assembly::Register>) {
+        let mut instrs: Vec<assembly::Instruction> = Vec::with_capacity(func.body.len());
 
         instrs.push(assembly::Instruction::AllocateStack(func.stack_size as u8));
+
+        let mut added_to_sp = 0;
+        let mut extra_added_to_sp = 0;
+        let r14 = assembly::Register::new(String::from("r14"));
+
+        let mut saved_at = vec![];
+
+        for (i, reg) in callee_saved.iter().enumerate() {
+            // push reg
+            let mod_i = i as i16 % 8;
+            added_to_sp += 1;
+            let added_extra = mod_i == 0 && i > 0;
+            if added_extra {
+                extra_added_to_sp += 8;
+                instrs.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), -8));
+            }
+
+            saved_at.push((assembly::Operand::Register(reg.clone()), i as i16));
+
+            instrs.push(assembly::Instruction::Str(assembly::Operand::Register(reg.clone()), mod_i, r14.clone()));
+        }
+
+        self.current_callee_saved_regs = (saved_at.clone(), func.stack_size);
+
+        if extra_added_to_sp != added_to_sp {
+            instrs.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), extra_added_to_sp-added_to_sp));
+        }
 
         for stmt in &func.body {
             self.generate_instruction(stmt, &mut instrs);
@@ -219,6 +253,34 @@ impl InstructionFixupPass {
                 if is_src1_reg && is_src2_reg && is_dst_reg {
                     instructions.push(stmt.clone())
                 } else {
+                    let is_adi_op = match op {
+                        assembly::Binop::Add => (true, true),
+                        assembly::Binop::Subtract => (true, false),
+                        _ => (false, false)
+                    };
+                    let is_imm_and_reg = match (src1, src2) {
+                        (assembly::Operand::Register(r), assembly::Operand::Immediate(v)) |
+                        (assembly::Operand::Immediate(v), assembly::Operand::Register(r)) => (true, assembly::Operand::Register(r.clone()), *v),
+                        _ => (false, assembly::Operand::Immediate(0), 0)
+                    };
+
+                    // TODO: make add(a, 0, b) into mov(a, b)
+
+                    if is_adi_op.0 && is_imm_and_reg.0 && *dst == is_imm_and_reg.1 {
+                        // yay we can do adi!!
+                        let imm = if is_adi_op.1 { is_imm_and_reg.2 } else { -is_imm_and_reg.2 };
+
+                        if imm == 0 {
+                            return;
+                        }
+
+                        instructions.push(assembly::Instruction::Adi(
+                            is_imm_and_reg.1.clone(),
+                            imm,
+                        ));
+                        return;
+                    }
+
                     let src1_reg = if is_src1_reg { src1_reg } else { assembly::Register::new("r10".to_string()) };
                     let src2_reg = if is_src2_reg { src2_reg } else { assembly::Register::new("r11".to_string()) };
                     let dst_reg = if is_dst_reg { dst_reg } else { assembly::Register::new("r11".to_string()) }; 
@@ -378,13 +440,55 @@ impl InstructionFixupPass {
                     unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                 }
             },
+            assembly::Instruction::Return => {
+                let mut added_to_sp = 0;
+                let r14 = assembly::Register::new(String::from("r14"));
+
+                instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), self.current_callee_saved_regs.0.len() as i16));
+
+                for (i, reg) in self.current_callee_saved_regs.0.iter().enumerate() {
+                    // push reg
+                    let mod_i = i as i16 % 8;
+                    let added_extra = mod_i == 0 && i > 0;
+                    if added_extra {
+                        added_to_sp += 8;
+                        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), -8));
+                    }
+        
+                    instructions.push(assembly::Instruction::Lod(r14.clone(), mod_i, reg.0.clone()));
+                }
+
+                if added_to_sp != 0 {
+                    instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), added_to_sp));
+                }
+
+                instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14), self.current_callee_saved_regs.1));
+
+                // mov r15 r14\n    lod r14 r15 1\n    adi r14 1\n    
+
+                instructions.push(assembly::Instruction::Mov(
+                    assembly::Operand::Register(assembly::Register::new(String::from("r15"))),
+                    assembly::Operand::Register(assembly::Register::new(String::from("r14")))
+                ));
+                instructions.push(assembly::Instruction::Lod(
+                    assembly::Register::new(String::from("r14")),
+                    -1,
+                    assembly::Operand::Register(assembly::Register::new(String::from("r15"))),
+                ));
+                instructions.push(assembly::Instruction::Adi(
+                    assembly::Operand::Register(assembly::Register::new(String::from("r14"))),
+                    1
+                ));
+
+                instructions.push(assembly::Instruction::Return);
+            }
+
             assembly::Instruction::Ldi(_, _) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Jmp(_) |
             assembly::Instruction::JmpCC(_, _) |
             assembly::Instruction::Label(_) |
-            assembly::Instruction::Call(_, _) |
-            assembly::Instruction::Return => instructions.push(stmt.clone()),
+            assembly::Instruction::Call(_, _) => instructions.push(stmt.clone()),
             //d_ => instructions.push(stmt.clone()),
         }
     }

@@ -89,28 +89,30 @@ if uses_malloc {
 adi r1 1
 ldi r2 0
 .malloc.l1
-lod r2 r3
-cmp r3 r0
-brh eq .malloc.el1
-add r2 r3 r2
-jmp .malloc.l1
+    lod r2 r3
+    cmp r3 r0
+    brh eq .malloc.el1
+    add r2 r3 r2
+    jmp .malloc.l1
 .malloc.el1
 ldi r4 0
 .malloc.l2
-adi r4 1
-adi r2 1
-lod r2 r3
-cmp r1 r4
-brh eq .malloc.el2
-cmp r3 r0
-brh ne .malloc.l1
-jmp .malloc.l2
+    adi r4 1
+    adi r2 1
+    lod r2 r3
+    cmp r1 r4
+    brh eq .malloc.el2
+    cmp r3 r0
+    brh ne .malloc.l1
+    jmp .malloc.l2
 .malloc.el2
 sub r2 r1 r1
 str r1 r4 0
-adi r1 1
+mov r2 r1
+adi r1 -1
 ret" } else { "" },
 if uses_free {
+// TODO: rewrite this. it doesnt work.
 ".free
 lod r1 r2 -1
 .free.loop1
@@ -209,7 +211,7 @@ ret
                 format!("ldi {} {}", self.emit_operand(reg), i)
             }
             assembly::Instruction::Return => {
-                "mov r15 r14\n    lod r14 r15 1\n    adi r14 1\n    ret".to_string()
+                "ret".to_string()
             }
             assembly::Instruction::Unary(ref op, ref src, ref dst) => {
                 self.emit_unop(op, src, dst)

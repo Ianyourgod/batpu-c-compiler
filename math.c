@@ -12,8 +12,10 @@
 #define TOKEN_DIV 6
 #define TOKEN_LPAREN 7
 #define TOKEN_RPAREN 8
+#define NULL 0
 
 static void mem_write(int addr, int val);
+static int mem_read(int addr);
 static void exit(int code);
 static void* malloc(int size);
 static void free(void* pos);
@@ -33,67 +35,48 @@ struct Token {
     char* value;
 };
 
-/*
+
 static int isdigit(char ch) {
-    return ch == '1';
+    // check if the char-'0' is between 0 and 9
+    int as_i = ((int) ch) - ((int) '0');
+    return as_i >= 0 && as_i <= 9;
 }
 
 static int atoi(char* str) {
-    return 1;
-}*/
+    return ((int) *str) - ((int) '0');
+}
 
 static struct Token* lexer_get_next_token(struct Lexer* self) {
-    char value[1] = { '0' };
+    char* val = malloc(2);
     struct Token* token = malloc(sizeof (struct Token));
-    token->type = 0;
-    token->value = value;
+    token->type = TOKEN_EOF;
+    token->value = val;
 
-    //while (self->input[self->position] != '\0') {
-        //if (isdigit(self->input[self->position])) {
-        token->type = TOKEN_INT;
-        //int i = 0;
-        //while (isdigit(self->input[self->position])) {
-            token->value[0] = self->input[self->position];
-            //i++;
-            self->position++;
-        //}
-        //break;
-        /* 
-        if (self->input[self->position] == '.') {
+    while (self->input[self->position] != '\0') {
+        if (isdigit(self->input[self->position])) {
+            token->type = TOKEN_INT;
+            while (isdigit(self->input[self->position])) {
+                token->value[0] = self->input[self->position];
+                self->position++;
+            }
+            break;
+        }
+        if (self->input[self->position] == '+') {
             token->type = TOKEN_ADD;
             self->position++;
             break;
-        } else if (self->input[self->position] == '!') {
+        }
+        if (self->input[self->position] == '-') {
             token->type = TOKEN_SUB;
             self->position++;
             break;
-        } else if (self->input[self->position] == '*') {
-            token.type = TOKEN_MUL;
-            self->position++;
-            break;
-        } else if (self->input[self->position] == '/') {
-            token.type = TOKEN_DIV;
-            self->position++;
-            break;
-        } else if (self->input[self->position] == 'x') {
-            token->type = TOKEN_LPAREN;
-            self->position++;
-            break;
-        } else if (self->input[self->position] == 'y') {
-            token->type = TOKEN_RPAREN;
-            self->position++;
-            break;
-        } else {
-            self->position++;
         }
-        */
-    //}
-
-    /*
-    if (self->input[self->position] == '\0') {
-        token->type = TOKEN_EOF;
+        if (self->input[self->position] == '*') {
+            token->type = TOKEN_MUL;
+            self->position++;
+            break;
+        }
     }
-    */
 
     return token;
 }
@@ -161,7 +144,7 @@ static struct Node* parser_factor(struct Parser* self) {
     if (self->current_token->type == TOKEN_INT) {
         struct Node* node = (struct Node*)malloc(sizeof(struct Node));
         node->type = TOKEN_INT;
-        node->value = 1;
+        node->value = atoi(self->current_token->value);
         parser_eat(self);
         return node;
     }
@@ -171,6 +154,7 @@ static struct Node* parser_factor(struct Parser* self) {
         parser_eat(self);
         return node;
     }
+    return (struct Node*) self->current_token;
 }
 
 static struct Node* parser_term(struct Parser* self) {
@@ -222,21 +206,23 @@ static void free_node(struct Node* node) {
 */
 
 static int interpret(struct Node* node) {
-    //if (node->type == TOKEN_INT) {
-        return ((int) node->value) - 60;
-    /*} else {
+    if (node->type == TOKEN_INT) {
+        return node->value;
+    } else {
+        int left = interpret(node->left);
+        int right = interpret(node->right);
         if (node->type == TOKEN_ADD) {
-            return interpret(node->left) + interpret(node->right);
+            return left + right;
         } else if (node->type == TOKEN_SUB) {
             return left - right;
         } else if (node->type == TOKEN_MUL) {
-            //return left * right;
-        } else if (node->type == TOKEN_DIV) {
+            return __mult(left, right);
+        }/* else if (node->type == TOKEN_DIV) {
             //return left / right;
         }
-    //}
-    //printf("Invalid syntax\n");
     */
+    }
+    //printf("Invalid syntax\n");
     
     //exit(255);
 }
@@ -251,17 +237,15 @@ static int main() {
 
     //exit(0);
 
-    char input[2] = { '1', '\0' };
+    char input[6] = { '1', '+', '2', '*', '5', '\0' };
 
     // tokenize
     struct Lexer lexer = {0, input};
 
     // parse the input
-    struct Parser* parser = malloc(sizeof (struct Parser));
-    parser->lexer = &lexer;
-    parser->current_token = lexer_get_next_token(&lexer);
+    struct Parser parser = { &lexer, lexer_get_next_token(&lexer)};
 
-    struct Node* ast = parser_expr(parser);
+    struct Node* ast = parser_expr(&parser);
 
     return interpret(ast);
 }

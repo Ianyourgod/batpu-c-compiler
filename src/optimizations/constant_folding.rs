@@ -39,6 +39,27 @@ impl ConstantFolding {
                         out.push(instruction.clone());
                     }
                 },
+                definition::Instruction::AddPtr(val1, val2, offset, dst) => {
+                    if *offset == 1 {
+                        // convert this to just `dst = val1+val2`;
+                        out.push(definition::Instruction::Binary(definition::Binop::Subtract, val1.clone(), val2.clone(), dst.clone()));
+                        continue;
+                    }
+
+                    let (val2_is_const, val2_c) = match val2 {
+                        definition::Val::Const(c) => (true, *c),
+                        _ => (false, 0)
+                    };
+
+                    if val2_is_const {
+                        // convert this to `dst = val1+{val2*off (figured out compile time)}`
+                        let val = definition::Val::Const(offset * val2_c);
+                        out.push(definition::Instruction::Binary(definition::Binop::Add, val1.clone(), val, dst.clone()));
+                        continue;
+                    }
+
+                    out.push(instruction.clone());
+                }
                 _ => {
                     out.push(instruction.clone());
                 }
