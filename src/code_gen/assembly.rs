@@ -57,6 +57,8 @@ pub enum Instruction {
 pub enum Unop {
     Negate,
     BitwiseNot,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

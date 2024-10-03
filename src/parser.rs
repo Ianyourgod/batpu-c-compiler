@@ -642,8 +642,10 @@ impl Parser {
 
     fn get_precedence(&self, token: &TokenType) -> i32 {
         match token {
-            TokenType::Increment | TokenType::Decrement => 50,
+            TokenType::Increment | TokenType::Decrement => 60,
+            TokenType::Star => 55,
             TokenType::Plus | TokenType::Minus => 45,
+            TokenType::LeftShift | TokenType::RightShift => 40,
             TokenType::LessThan | TokenType::GreaterThan |
             TokenType::LessThanEqual | TokenType::GreaterThanEqual => 35,
             TokenType::Equal | TokenType::NotEqual => 30,
@@ -668,6 +670,9 @@ impl Parser {
             TokenType::GreaterThan => nodes::Binop::GreaterThan,
             TokenType::LessThanEqual => nodes::Binop::LessThanEqual,
             TokenType::GreaterThanEqual => nodes::Binop::GreaterThanEqual,
+            TokenType::LeftShift => nodes::Binop::LeftShift,
+            TokenType::RightShift => nodes::Binop::RightShift,
+            TokenType::Star => nodes::Binop::Multiply,
             _ => panic!("Unknown token: {:?}", token),
         }
     }

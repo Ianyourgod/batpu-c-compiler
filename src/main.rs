@@ -157,17 +157,19 @@ fn compile(input_file: &String, args: Settings) -> String {
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program();
+
+    //println!("{:#?}", program.statements.get(15));
     
     #[allow(unused_variables)]
     let (program, symbol_table, type_table) = semantic_analysis::resolve(program);
 
-    //println!("{:#?}", program.statements.get(9));
+    //println!("{:#?}", program);
 
     let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
     let program = tacky.emit();
     let aliased_vars = HashMap::new();
 
-    //println!("{:#?}", program.statements.get(7));
+    //println!("{:#?}", program);
 
     let (program, aliased_vars) = if !args.dont_optimize {
         optimizations::optimize(program)

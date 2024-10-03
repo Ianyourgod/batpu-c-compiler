@@ -73,10 +73,19 @@ impl ConvertPass {
         program.statements.push(assembly::TopLevel::StaticVariable(name, global, init));
     }
 
-    fn generate_label(&mut self, label: String) -> String {
+    fn generate_label(&mut self, label: &str) -> String {
         let label = format!("cL.{}.{}", label, self.tmp_counter); 
         self.tmp_counter += 1;
         label
+    }
+
+    fn generate_variable(&mut self, name: &str, ty: definition::Type) -> assembly::Operand {
+        let name = format!("cV.{}.{}", name, self.tmp_counter);
+
+        match ty {
+            definition::Type::Array(_, _) => assembly::Operand::PseudoMem(name, 0, ty),
+            _ => assembly::Operand::Pseudo(name, ty),
+        }
     }
 
     fn classify_parameters(&self, values: Vec<definition::Val>) -> (Vec<(assembly::Operand, assembly::Register)>, Vec<(assembly::Operand, i16)>) { // (registers, stack)
@@ -157,8 +166,8 @@ impl ConvertPass {
         };
 
         if is_simple {
-            let true_label = self.generate_label("true".to_string());
-            let end_label = self.generate_label("end".to_string());
+            let true_label = self.generate_label("true");
+            let end_label = self.generate_label("end");
             
             instructions.push(assembly::Instruction::JmpCC(
                 cond,
@@ -237,8 +246,8 @@ impl ConvertPass {
                             self.convert_val(src1),
                             self.convert_val(src2)
                         ));
-                        let false_label = self.generate_label("false".to_string());
-                        let end_label = self.generate_label("end".to_string());
+                        let false_label = self.generate_label("false");
+                        let end_label = self.generate_label("end");
 
                         let dst = self.convert_val(dst);
 
@@ -256,8 +265,8 @@ impl ConvertPass {
                             self.convert_val(src1),
                             self.convert_val(src2)
                         ));
-                        let true_label = self.generate_label("true".to_string());
-                        let end_label = self.generate_label("end".to_string());
+                        let true_label = self.generate_label("true");
+                        let end_label = self.generate_label("end");
 
                         let dst = self.convert_val(dst);
 
@@ -270,6 +279,97 @@ impl ConvertPass {
                         instructions.push(assembly::Instruction::Label(end_label));
                         return;
                     },
+                    definition::Binop::Multiply => {
+                        // we just call the __mult function
+                        instructions.push(assembly::Instruction::Mov(
+                            self.convert_val(src1),
+                            assembly::Operand::Register(assembly::Register::new("r1".to_string()))
+                        ));
+                        instructions.push(assembly::Instruction::Mov(
+                            self.convert_val(src2),
+                            assembly::Operand::Register(assembly::Register::new("r2".to_string()))
+                        ));
+                        instructions.push(assembly::Instruction::Call("__mult".to_string(), false));
+                        instructions.push(assembly::Instruction::Mov(
+                            assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                            self.convert_val(dst)
+                        ));
+                        return;
+                    }
+                    definition::Binop::LeftShift | definition::Binop::RightShift => {
+                        /*
+                        temp_src2 = src2
+                        dest = src1
+                        while temp_src2 > 0 {
+                            dest = dest << // shift is unary
+                            temp_src2--
+                        }
+                         */
+
+                        let dst = self.convert_val(dst);
+                        instructions.push(assembly::Instruction::Mov(
+                            self.convert_val(src1),
+                            dst.clone()
+                        ));
+
+                        // if src2 is a constant just do `dst = src1; dst<<;dst<<...`
+                        let (is_const, imm) = match src2 {
+                            definition::Val::Const(v) => (true, *v),
+                            _ => (false, 0)
+                        };
+
+                        let op = match op {
+                            definition::Binop::LeftShift => assembly::Unop::LeftShift,
+                            definition::Binop::RightShift => assembly::Unop::RightShift,
+                            _ => unreachable!(),
+                        };
+
+                        if is_const {
+                            for _ in 0..imm {
+                                instructions.push(assembly::Instruction::Unary(op.clone(), dst.clone(), dst.clone()));
+                            }
+
+                            return;
+                        }
+
+                        let temp_src2 = self.generate_variable("temp_src2", definition::Type::Int);
+
+                        instructions.push(assembly::Instruction::Mov(
+                            self.convert_val(src2),
+                            temp_src2.clone()
+                        ));
+
+                        let loop_label = self.generate_label("shift_loop");
+                        let end_label = self.generate_label("shift_end");
+
+                        // while temp_src2 > 0
+                        instructions.push(assembly::Instruction::Label(loop_label.clone()));
+                        instructions.push(assembly::Instruction::Cmp(
+                            temp_src2.clone(),
+                            assembly::Operand::Immediate(0)
+                        ));
+                        instructions.push(assembly::Instruction::JmpCC(
+                            assembly::CondCode::Equal,
+                            end_label.clone()
+                        ));
+                        
+                        // dest = dest << 1
+                        instructions.push(assembly::Instruction::Unary(
+                            op,
+                            dst.clone(),
+                            dst,
+                        ));
+
+                        // temp_src2--
+                        instructions.push(assembly::Instruction::Adi(
+                            temp_src2.clone(),
+                            -1
+                        ));
+
+                        instructions.push(assembly::Instruction::Jmp(loop_label));
+
+                        return;
+                    }
                     _ => ()
                 }
                 

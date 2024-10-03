@@ -261,7 +261,13 @@ impl VariableResolution {
                                 ty,
                             }))
                         } else {
-                            nodes::BlockItem::Statement(nodes::Statement::Empty)
+                            let ty = self.resolve_type(&decl.ty, context);
+                            nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
+                                name: unique_name,
+                                expr: None,
+                                storage_class: decl.storage_class,
+                                ty
+                            }))
                         }
                     }
                     nodes::Declaration::StructDecl(decl) => {

@@ -258,6 +258,7 @@ impl Tacky {
         match op {
             nodes::Binop::Add => definition::Binop::Add,
             nodes::Binop::Subtract => definition::Binop::Subtract,
+            nodes::Binop::Multiply => definition::Binop::Multiply,
             nodes::Binop::And => definition::Binop::And,
             nodes::Binop::Or => definition::Binop::Or,
             nodes::Binop::Equal => definition::Binop::Equal,
@@ -266,6 +267,8 @@ impl Tacky {
             nodes::Binop::GreaterThan => definition::Binop::GreaterThan,
             nodes::Binop::LessThanEqual => definition::Binop::LessThanEqual,
             nodes::Binop::GreaterThanEqual => definition::Binop::GreaterThanEqual,
+            nodes::Binop::LeftShift => definition::Binop::LeftShift,
+            nodes::Binop::RightShift => definition::Binop::RightShift,
         }
     }
 
@@ -297,6 +300,7 @@ impl Tacky {
             nodes::ExpressionEnum::Binop(op, ref lft, ref rht) => {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), lft.ty.clone());
+
                 let tacky_op = self.convert_binop(op);
 
                 let sh_circ = self.is_short_circuiting(op);
@@ -435,7 +439,7 @@ impl Tacky {
             nodes::ExpressionEnum::FunctionCall(ref ident, ref args) => {
                 let mut arg_vals = Vec::new();
                 for arg in args {
-                    arg_vals.push(self.emit_tacky_and_convert(&arg.expr, body, ty));
+                    arg_vals.push(self.emit_tacky_and_convert(&arg.expr, body, &arg.ty));
                 }
 
                 let is_global = &self.symbol_table.lookup(ident).unwrap().1;

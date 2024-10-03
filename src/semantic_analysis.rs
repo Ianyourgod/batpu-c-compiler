@@ -13,6 +13,8 @@ pub fn resolve(program: nodes::Program) -> (nodes::Program, nodes::SymbolTable, 
     let mut loop_labeler = loop_labeling::LoopLabeling::new(program);
     let program = loop_labeler.resolve();
 
+    //println!("{:#?}", program.statements.get(15));
+
     let mut type_checker = type_checking::TypeChecker::new(program);
     type_checker.resolve()
 }

@@ -32,12 +32,18 @@ impl ConstantFolding {
                             definition::Binop::GreaterThan => if val1 > val2 { 1 } else { 0 },
                             definition::Binop::LessThanEqual => if val1 <= val2 { 1 } else { 0 },
                             definition::Binop::GreaterThanEqual => if val1 >= val2 { 1 } else { 0 },
+                            definition::Binop::LeftShift => val1 << val2,
+                            definition::Binop::RightShift => val1 >> val2,
+                            definition::Binop::Multiply => val1 * val2,
                         };
 
                         out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));
                     } else {
                         out.push(instruction.clone());
                     }
+                },
+                definition::Instruction::Unary(ref _op, ref _src, ref _dest) => {
+                    out.push(instruction.clone()); // TODO: implement unary constant folding
                 },
                 definition::Instruction::AddPtr(val1, val2, offset, dst) => {
                     if *offset == 1 {

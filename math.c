@@ -12,6 +12,7 @@
 #define TOKEN_DIV 6
 #define TOKEN_LPAREN 7
 #define TOKEN_RPAREN 8
+#define TOKEN_X 9
 #define NULL 0
 
 static void mem_write(int addr, int val);
@@ -19,7 +20,6 @@ static int mem_read(int addr);
 static void exit(int code);
 static void* malloc(int size);
 static void free(void* pos);
-static int __mult(int a, int b);
 
 /********************\
 |     * LEXER *      |
@@ -53,29 +53,32 @@ static struct Token* lexer_get_next_token(struct Lexer* self) {
     token->value = val;
 
     while (self->input[self->position] != '\0') {
-        if (isdigit(self->input[self->position])) {
+        char cur_char = self->input[self->position];
+        if (isdigit(cur_char)) {
             token->type = TOKEN_INT;
+            int i = 0;
             while (isdigit(self->input[self->position])) {
-                token->value[0] = self->input[self->position];
+                token->value[i] = self->input[self->position];
+                i++;
                 self->position++;
             }
             break;
-        }
-        if (self->input[self->position] == '+') {
+        } else if (cur_char == '+') {
             token->type = TOKEN_ADD;
-            self->position++;
-            break;
-        }
-        if (self->input[self->position] == '-') {
+        } else if (cur_char == '-') {
             token->type = TOKEN_SUB;
-            self->position++;
-            break;
-        }
-        if (self->input[self->position] == '*') {
+        } else if (cur_char == '*') {
             token->type = TOKEN_MUL;
-            self->position++;
-            break;
+        } else if (cur_char == 'x') {
+            token->type = TOKEN_X;
+        } else if (cur_char == '(') {
+            token->type = TOKEN_LPAREN;
+        } else if (cur_char == ')') {
+            token->type = TOKEN_RPAREN;
         }
+
+        self->position++;
+        break;
     }
 
     return token;
@@ -141,20 +144,21 @@ static void parser_eat(struct Parser* self) {
 static struct Node* parser_expr(struct Parser* self); // forward declaration because c is a pain
 
 static struct Node* parser_factor(struct Parser* self) {
-    if (self->current_token->type == TOKEN_INT) {
-        struct Node* node = (struct Node*)malloc(sizeof(struct Node));
+    int ty = self->current_token->type;
+    struct Node* node;
+    if (ty == TOKEN_INT) {
+        node = (struct Node*)malloc(sizeof(struct Node));
         node->type = TOKEN_INT;
         node->value = atoi(self->current_token->value);
+    } else if (ty == TOKEN_LPAREN) {
         parser_eat(self);
-        return node;
+        node = parser_expr(self);
+    } else if (ty == TOKEN_X) {
+        node = (struct Node*)malloc(sizeof(struct Node));
+        node->type = TOKEN_X;
     }
-    if (self->current_token->type == TOKEN_LPAREN) {
-        parser_eat(self);
-        struct Node* node = parser_expr(self);
-        parser_eat(self);
-        return node;
-    }
-    return (struct Node*) self->current_token;
+    parser_eat(self);
+    return node;
 }
 
 static struct Node* parser_term(struct Parser* self) {
@@ -195,49 +199,46 @@ static struct Node* parser_expr(struct Parser* self) {
     return node;
 }
 
-/*
-static void free_node(struct Node* node) {
-    if (node->type != TOKEN_INT) {
-        free_node(node->left);
-        free_node(node->right);
-    }
-    free(node);
-}
-*/
-
-static int interpret(struct Node* node) {
+static int interpret(struct Node* node, int x) {
     if (node->type == TOKEN_INT) {
         return node->value;
+    } else if (node->type == TOKEN_X) {
+        return x;
     } else {
-        int left = interpret(node->left);
-        int right = interpret(node->right);
+        int left = interpret(node->left, x);
+        int right = interpret(node->right, x);
         if (node->type == TOKEN_ADD) {
             return left + right;
         } else if (node->type == TOKEN_SUB) {
             return left - right;
         } else if (node->type == TOKEN_MUL) {
-            return __mult(left, right);
+            return left * right;
         }/* else if (node->type == TOKEN_DIV) {
             //return left / right;
         }
     */
     }
-    //printf("Invalid syntax\n");
-    
-    //exit(255);
+}
+
+static void graph(struct Node* ast) {
+    mem_write(246, 1);
+
+    // x^2 - y == 0
+    //mem_write(240, 1);
+    //mem_write(241, 1);
+    //mem_write(242, 1);
+
+    for (int x=0;x<32;x++) {
+        mem_write(240, x);
+        mem_write(241, interpret(ast, x));
+        mem_write(242, 1);
+    }
+
+    mem_write(245, 1);
 }
 
 static int main() {
-    // get user input
-    
-    //printf("Enter an expression: ");
-
-    //char input[100];
-    //fgets(input, 100, stdin);
-
-    //exit(0);
-
-    char input[6] = { '1', '+', '2', '*', '5', '\0' };
+    char input[6] = { '2', '*', 'x', '+', '4', '\0' };
 
     // tokenize
     struct Lexer lexer = {0, input};
@@ -247,5 +248,9 @@ static int main() {
 
     struct Node* ast = parser_expr(&parser);
 
-    return interpret(ast);
+    //return interpret(ast, 1);
+
+    graph(ast);
+
+    return 0;
 }

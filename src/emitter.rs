@@ -182,6 +182,14 @@ ret
                 let src = self.emit_operand(src);
                 format!("nor {} {} {}", src, src, self.emit_operand(dst))
             }
+            assembly::Unop::LeftShift => {
+                let src = self.emit_operand(src);
+                format!("lsh {} {}", src, self.emit_operand(dst))
+            }
+            assembly::Unop::RightShift => {
+                let src = self.emit_operand(src);
+                format!("rsh {} {}", src, self.emit_operand(dst))
+            }
         }
     }
 

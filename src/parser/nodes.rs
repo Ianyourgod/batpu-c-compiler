@@ -122,6 +122,7 @@ pub enum Unop {
 pub enum Binop {
     Add,
     Subtract,
+    Multiply,
     And,
     Or,
     Equal,
@@ -130,6 +131,8 @@ pub enum Binop {
     LessThanEqual,
     GreaterThan,
     GreaterThanEqual,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Debug, Clone)]

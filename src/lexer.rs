@@ -51,6 +51,9 @@ pub enum TokenType {
     LessThanEqual,
     GreaterThanEqual,
 
+    RightShift,
+    LeftShift,
+
     Period,
     Arrow,
 
@@ -145,11 +148,13 @@ impl Lexer {
             ),
             '<' => after_char!(self, self.peek_char(),
                 TokenType::LessThan,
-                ('=', TokenType::LessThanEqual)
+                ('=', TokenType::LessThanEqual),
+                ('<', TokenType::LeftShift)
             ),
             '>' => after_char!(self, self.peek_char(),
                 TokenType::GreaterThan,
-                ('=', TokenType::GreaterThanEqual)
+                ('=', TokenType::GreaterThanEqual),
+                ('>', TokenType::RightShift)
             ),
             '\'' => {
                 self.read_char();
