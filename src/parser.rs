@@ -643,7 +643,7 @@ impl Parser {
     fn get_precedence(&self, token: &TokenType) -> i32 {
         match token {
             TokenType::Increment | TokenType::Decrement => 60,
-            TokenType::Star => 55,
+            TokenType::Star | TokenType::Slash => 55,
             TokenType::Plus | TokenType::Minus => 45,
             TokenType::LeftShift | TokenType::RightShift => 40,
             TokenType::LessThan | TokenType::GreaterThan |
@@ -673,6 +673,7 @@ impl Parser {
             TokenType::LeftShift => nodes::Binop::LeftShift,
             TokenType::RightShift => nodes::Binop::RightShift,
             TokenType::Star => nodes::Binop::Multiply,
+            TokenType::Slash => nodes::Binop::Divide,
             _ => panic!("Unknown token: {:?}", token),
         }
     }

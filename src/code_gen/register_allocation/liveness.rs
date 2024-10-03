@@ -243,6 +243,7 @@ impl LivenessAnalysis {
                 // lookup function and get all registers used
                 let used_registers = match name.as_str() {
                     "__mult" => vec![assembly::Operand::Register(assembly::Register::new(String::from("r1"))), assembly::Operand::Register(assembly::Register::new(String::from("r2")))],
+                    "__div" => vec![assembly::Operand::Register(assembly::Register::new(String::from("r1"))), assembly::Operand::Register(assembly::Register::new(String::from("r2")))],
                     _ => self.function_table.lookup(name).unwrap().iter().map(|x| assembly::Operand::Register(x.clone())).collect()
                 };
 

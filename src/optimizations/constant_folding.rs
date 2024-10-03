@@ -35,6 +35,7 @@ impl ConstantFolding {
                             definition::Binop::LeftShift => val1 << val2,
                             definition::Binop::RightShift => val1 >> val2,
                             definition::Binop::Multiply => val1 * val2,
+                            definition::Binop::Divide => val1 / val2,
                         };
 
                         out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));

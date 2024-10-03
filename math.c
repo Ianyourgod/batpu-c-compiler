@@ -69,6 +69,8 @@ static struct Token* lexer_get_next_token(struct Lexer* self) {
             token->type = TOKEN_SUB;
         } else if (cur_char == '*') {
             token->type = TOKEN_MUL;
+        } else if (cur_char == '/') {
+            token->type = TOKEN_DIV;
         } else if (cur_char == 'x') {
             token->type = TOKEN_X;
         } else if (cur_char == '(') {
@@ -213,10 +215,9 @@ static int interpret(struct Node* node, int x) {
             return left - right;
         } else if (node->type == TOKEN_MUL) {
             return left * right;
-        }/* else if (node->type == TOKEN_DIV) {
-            //return left / right;
+        } else if (node->type == TOKEN_DIV) {
+            return left / right;
         }
-    */
     }
 }
 
@@ -237,8 +238,20 @@ static void graph(struct Node* ast) {
     mem_write(245, 1);
 }
 
+static void printf(char* str) {
+    mem_write(249, 1);
+    while (*str != '\0') {
+        mem_write(247, (int) *str);
+        str++;
+    }
+    mem_write(248, 1);
+}
+
 static int main() {
-    char input[6] = { '2', '*', 'x', '+', '4', '\0' };
+    char input[14] = { '(', 'x', '-', '9', ')', '*', '(', 'x', '-', '9', ')', '/', '8', '\0' }; 
+
+    // cant do this because display can only do ' ', 'a' - 'z', '.', '!, and '?', (no numbers or symbols that we support)
+    //printf(input);
 
     // tokenize
     struct Lexer lexer = {0, input};

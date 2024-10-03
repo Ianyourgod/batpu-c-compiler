@@ -51,7 +51,9 @@ impl Emitter {
 
     pub fn emit(&self, include_comments: bool) -> String {
         let (contains_main, main_global) = self.has_function_named("main");
+        // TODO: dont do this shit. its stupid.
         let uses_mult = self.uses_function_named("__mult");
+        let uses_div = self.uses_function_named("__div");
         let uses_malloc = self.uses_function_named("malloc");
         let uses_free = self.uses_function_named("free");
         let mut output = format!("
@@ -72,6 +74,7 @@ cal .exit
 {}
 {}
 {}
+{}
 ", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" },
 if uses_mult {
 ".__mult
@@ -84,6 +87,19 @@ if uses_mult {
   ..MULT_END
   MOV r3 r1
   RET" } else { "" },
+if uses_div {
+".__div
+ldi r3 0
+.__div..loop1
+cmp r1 r2
+brh lt .__div..end
+sub r1 r2 r1
+inc r3
+jmp .__div..loop1
+.__div..end
+mov r3 r1
+ret"
+} else { "" },
 if uses_malloc {
 ".malloc
 adi r1 1

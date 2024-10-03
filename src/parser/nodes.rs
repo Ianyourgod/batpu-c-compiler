@@ -123,6 +123,7 @@ pub enum Binop {
     Add,
     Subtract,
     Multiply,
+    Divide,
     And,
     Or,
     Equal,
