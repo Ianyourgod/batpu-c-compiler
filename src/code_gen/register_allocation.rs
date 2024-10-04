@@ -6,6 +6,8 @@ use std::collections::HashMap;
 
 use super::assembly;
 
+const K: i32 = 11;
+
 pub fn register_allocation(functions: assembly::Program, function_table: assembly::FunctionTable, aliased: HashMap<String, Vec<String>>) -> (assembly::Program, HashMap<String, Vec<assembly::Register>>) {
     let mut transformed_functions = Vec::new();
     let mut callee_saved = HashMap::new();
@@ -31,12 +33,21 @@ pub fn register_allocation(functions: assembly::Program, function_table: assembl
     }, callee_saved)
 }
 
-pub fn allocate_registers(instructions: assembly::FuncDecl, function_table: &assembly::FunctionTable, aliased: &Vec<String>) -> (assembly::FuncDecl, Vec<assembly::Register>) {
+pub fn allocate_registers(mut instructions: assembly::FuncDecl, function_table: &assembly::FunctionTable, aliased: &Vec<String>) -> (assembly::FuncDecl, Vec<assembly::Register>) {
     if !instructions.defined {
         return (instructions, vec![]);
     }
 
-    let (mut interference_graph, liveness_analysis) = build_graph(&instructions, function_table, aliased);
+    let (mut interference_graph, mut liveness_analysis): (Graph, liveness::LivenessAnalysis);
+    loop {
+        (interference_graph, liveness_analysis) = build_graph(&instructions, function_table, aliased);
+        let coalesced_regs = coalesce(&mut interference_graph, &instructions.body);
+        if coalesced_regs.same_set() {
+            break;
+        }
+        instructions.body = rewrite_coalesced(&instructions.body, &coalesced_regs);
+    }
+    
     add_spill_costs(&mut interference_graph, &instructions, liveness_analysis, aliased);
     
     color_graph::color_graph(&mut interference_graph);
@@ -53,6 +64,194 @@ pub fn allocate_registers(instructions: assembly::FuncDecl, function_table: &ass
         defined: true
     }, callee_saved)
 }
+
+fn coalesce(graph: &mut Graph, instructions: &Vec<assembly::Instruction>) -> DisjointSets {
+    let mut coalesced_regs = DisjointSets::new();
+
+    for instruction in instructions {
+        match instruction {
+            assembly::Instruction::Mov(src, dst) => {
+                let src = coalesced_regs.find(src);
+                let dst = coalesced_regs.find(dst);
+
+                let src_node = graph.nodes.get(&src);
+
+                if
+                    graph.nodes.contains_key(&src) &&
+                    graph.nodes.contains_key(&dst) &&
+                    src != dst &&
+                    !src_node.unwrap().neighbors.contains(&dst) &&
+                    conservitive_coalesceable(graph, &src, &dst)
+                {
+                    let (to_keep, to_merge) = if let assembly::Operand::Register(_) = src_node.unwrap().id {
+                        (src, dst)
+                    } else {
+                        (dst, src)
+                    };
+
+                    //println!("Merging {:?} into {:?}", to_merge, to_keep);
+
+                    coalesced_regs.union(to_merge.clone(), to_keep.clone());
+                    update_graph(graph, &to_merge, &to_keep);
+                }
+            }
+            _ => continue,
+        }
+    }
+
+    coalesced_regs
+}
+
+fn conservitive_coalesceable(graph: &Graph, src: &assembly::Operand, dst: &assembly::Operand) -> bool {
+    if briggs_test(graph, src, dst) {
+        return true;
+    }
+    if let assembly::Operand::Register(_) = src {
+        return george_test(graph, src, dst);
+    }
+    if let assembly::Operand::Register(_) = dst {
+        return george_test(graph, dst, src);
+    }
+    return false;
+}
+
+fn briggs_test(graph: &Graph, x: &assembly::Operand, y: &assembly::Operand) -> bool {
+    let mut significant_neighbors = 0;
+    let x_node = graph.nodes.get(x).unwrap();
+    let y_node = graph.nodes.get(y).unwrap();
+    // x_node neighbors combined with y_node neighbors
+    let combined_neighbors = x_node.neighbors.iter().chain(y_node.neighbors.iter());
+    for n in combined_neighbors {
+        let neighbor_node = graph.nodes.get(n).unwrap();
+        let mut degree = neighbor_node.neighbors.len();
+        if neighbor_node.neighbors.contains(x) &&
+           neighbor_node.neighbors.contains(y)
+        {
+            degree -= 1;
+        }
+        if degree >= K as usize {
+            significant_neighbors += 1;
+        }
+    }
+    return significant_neighbors < K;
+}
+
+fn update_graph(graph: &mut Graph, x: &assembly::Operand, y: &assembly::Operand) {
+    let node_to_remove = graph.nodes.get(x).unwrap();
+    for neighbor in node_to_remove.neighbors.clone() {
+        // add edge between y and neighbor
+        let y_node = graph.nodes.get_mut(y).unwrap();
+        y_node.neighbors.push(neighbor.clone());
+        let neighbor_node = graph.nodes.get_mut(&neighbor).unwrap();
+        neighbor_node.neighbors.push(y.clone());
+
+        // remove edge between x and neighbor
+        neighbor_node.neighbors.retain(|n| n != x);
+    }
+    // remove_node_by_id(graph, x);
+    graph.nodes.remove(x);
+}
+
+fn george_test(graph: &Graph, hardreg: &assembly::Operand, pseudoreg: &assembly::Operand) -> bool {
+    let pseudo_node = graph.nodes.get(pseudoreg).unwrap();
+    for n in &pseudo_node.neighbors {
+        if graph.nodes.get(n).unwrap().neighbors.contains(hardreg) {
+            continue;
+        }
+        let neighbor_node = graph.nodes.get(n).unwrap();
+        if neighbor_node.neighbors.len() < K as usize {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn rewrite_coalesced(instructions: &Vec<assembly::Instruction>, coalesced_regs: &DisjointSets) -> Vec<assembly::Instruction> {
+    let mut new_instructions = Vec::with_capacity(instructions.len());
+
+    for instruction in instructions {
+        match instruction {
+            assembly::Instruction::Mov(src, dst) => {
+                let src = coalesced_regs.find(src);
+                let dst = coalesced_regs.find(dst);
+
+                if src != dst {
+                    new_instructions.push(assembly::Instruction::Mov(src, dst));
+                }
+            }
+            assembly::Instruction::Binary(op, src1, src2, dst) => {
+                let src1 = coalesced_regs.find(src1);
+                let src2 = coalesced_regs.find(src2);
+                let dst = coalesced_regs.find(dst);
+
+                new_instructions.push(assembly::Instruction::Binary(op.clone(), src1, src2, dst));
+            }
+            assembly::Instruction::Unary(op, src, dst) => {
+                let src = coalesced_regs.find(src);
+                let dst = coalesced_regs.find(dst);
+
+                new_instructions.push(assembly::Instruction::Unary(op.clone(), src, dst));
+            }
+            assembly::Instruction::Adi(src, imm) => {
+                let src = coalesced_regs.find(src);
+
+                new_instructions.push(assembly::Instruction::Adi(src, *imm));
+            }
+            assembly::Instruction::Cmp(src1, src2) => {
+                let src1 = coalesced_regs.find(src1);
+                let src2 = coalesced_regs.find(src2);
+
+                new_instructions.push(assembly::Instruction::Cmp(src1, src2));
+            }
+            assembly::Instruction::Ldi(src, imm) => {
+                let src = coalesced_regs.find(src);
+
+                new_instructions.push(assembly::Instruction::Ldi(src, *imm));
+            }
+            assembly::Instruction::Lea(src, dst) => {
+                let src = coalesced_regs.find(src);
+                let dst = coalesced_regs.find(dst);
+
+                new_instructions.push(assembly::Instruction::Lea(src, dst));
+            }
+            assembly::Instruction::Lod(src, off, dst) => {
+                let src = coalesced_regs.find(&assembly::Operand::Register(src.clone()));
+                let dst = coalesced_regs.find(dst);
+
+                let src = match src {
+                    assembly::Operand::Register(r) => r,
+                    _ => panic!("INTERNAL ERROR. PLEASE REPORT: Expected register"),
+                };
+
+                new_instructions.push(assembly::Instruction::Lod(src, *off, dst));
+            }
+            assembly::Instruction::Str(src, off, dst) => {
+                let src = coalesced_regs.find(src);
+                let dst = coalesced_regs.find(&assembly::Operand::Register(dst.clone()));
+
+                let dst = match dst {
+                    assembly::Operand::Register(r) => r,
+                    _ => panic!("INTERNAL ERROR. PLEASE REPORT: Expected register"),
+                };
+
+                new_instructions.push(assembly::Instruction::Str(src, *off, dst));
+            }
+
+            assembly::Instruction::AllocateStack(_) |
+            assembly::Instruction::Comment(_) |
+            assembly::Instruction::Jmp(_) |
+            assembly::Instruction::JmpCC(_, _) |
+            assembly::Instruction::Label(_) |
+            assembly::Instruction::Call(_, _) |
+            assembly::Instruction::Return => {
+                new_instructions.push(instruction.clone());
+            }
+        }
+    }
+
+    new_instructions
+}
+
 
 fn add_spill_costs(interference_graph: &mut Graph, instructions: &assembly::FuncDecl, liveness: liveness::LivenessAnalysis, aliased: &Vec<String>) {
     for instruction in &instructions.body {
@@ -142,6 +341,37 @@ fn is_pseudo_register(operand: &assembly::Operand, aliased: &Vec<String>) -> boo
             !aliased.contains(name)
         }
         _ => false,
+    }
+}
+
+struct DisjointSets {
+    set: HashMap<assembly::Operand, assembly::Operand>,
+}
+
+impl DisjointSets {
+    pub fn new() -> DisjointSets {
+        DisjointSets {
+            set: HashMap::new(),
+        }
+    }
+
+    pub fn union(&mut self, a: assembly::Operand, b: assembly::Operand) {
+        self.set.insert(a, b);
+    }
+
+    pub fn contains(&self, r: &assembly::Operand) -> bool {
+        self.set.contains_key(r)
+    }
+
+    pub fn find(&self, r: &assembly::Operand) -> assembly::Operand {
+        match self.set.get(r) {
+            Some(res) => self.find(res),
+            None => r.clone(),
+        }
+    }
+
+    pub fn same_set(&self) -> bool {
+        return self.set.is_empty()
     }
 }
 
