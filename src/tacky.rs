@@ -113,7 +113,7 @@ impl Tacky {
                         // this is just assignment
                         let expr = decl.expr.as_ref().unwrap();
                         
-                        self.handle_initializer(expr, body, decl.name.clone(), &decl.ty, 0, true);
+                        self.handle_initializer(expr, body, &decl.name, &decl.ty, 0, true);
                     }
                     // we don't need to do anything for declarations without an expression
                 }
@@ -122,21 +122,24 @@ impl Tacky {
         }
     }
 
-    fn handle_initializer(&mut self, init: &nodes::Initializer, body: &mut Vec<definition::Instruction>, name: String, ty: &definition::Type, mut offset: i16, top_level: bool) {
+    fn handle_initializer(&mut self, init: &nodes::Initializer, body: &mut Vec<definition::Instruction>, name: &str, ty: &definition::Type, mut offset: i16, top_level: bool) {
         match init {
             nodes::Initializer::Single(ref expr) => {
                 let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
                 if !top_level {
-                    body.push(definition::Instruction::CopyToOffset(val, definition::Val::Var(name.clone(), ty.clone()), offset as i16));
+                    body.push(definition::Instruction::CopyToOffset(val, definition::Val::Var(name.to_string(), ty.clone()), offset as i16));
                 } else {
-                    body.push(definition::Instruction::Copy(definition::Val::Var(name.clone(), ty.clone()), val));
+                    body.push(definition::Instruction::Copy(definition::Val::Var(name.to_string(), ty.clone()), val));
                 }
             }
             nodes::Initializer::Compound(ref inits) => {
                 match ty {
                     definition::Type::Array(inner_ty, _) => {
+                        if name == "localvar.input.40" {
+                            println!("{:#?}", init);
+                        }
                         for init in inits {
-                            self.handle_initializer(init, body, name.clone(), ty, offset, false);
+                            self.handle_initializer(init, body, name, ty, offset, false);
                             offset += inner_ty.size() as i16;
                         }
                     }
@@ -144,7 +147,7 @@ impl Tacky {
                         let members = self.type_table.lookup(tag).unwrap().1.clone();
                         for (member, init) in members.iter().zip(inits) {
                             let member_offset = member.offset as i16;
-                            self.handle_initializer(init, body, name.clone(), ty, offset + member_offset, false);
+                            self.handle_initializer(init, body, name, ty, offset + member_offset, false);
                         }
                     }
                     _ => panic!("Invalid compound initializer"),
@@ -222,7 +225,7 @@ impl Tacky {
 
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            self.handle_initializer(&expr, body, decl.name.clone(), &decl.ty, 0, true);
+                            self.handle_initializer(&expr, body, &decl.name, &decl.ty, 0, true);
                         }
                     }
                     nodes::ForInit::Expression(ref expr) => {
@@ -562,6 +565,30 @@ impl Tacky {
                 body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i16), 1, dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
+            nodes::ExpressionEnum::StringLiteral(s) => {
+                // we turn this into a var = array of characters (so s+'\0')
+                let mut chars = s.chars().collect::<Vec<char>>();
+
+                chars.push('\0');
+
+                let init = nodes::Initializer::Compound(chars.into_iter().map(|c| nodes::Initializer::Single(nodes::Expression {
+                    expr: nodes::ExpressionEnum::CharLiteral(c),
+                    ty: nodes::Type::Char,
+                })).collect());
+
+                let name = self.make_temporary();
+                let ty = definition::Type::Array(Box::new(definition::Type::Char), s.len() as i16 + 1);
+                self.handle_initializer(&init, body, &name, &ty, 0, true);
+
+                let actual_ty = definition::Type::Pointer(Box::new(definition::Type::Char));
+
+                let dest_name = self.make_temporary();
+                let dest = definition::Val::Var(dest_name.clone(), actual_ty.clone());
+
+                body.push(definition::Instruction::GetAddress(definition::Val::Var(name.clone(), ty.clone()), dest.clone()));
+
+                dest
+            }
         }
     }
 

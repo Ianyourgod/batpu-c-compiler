@@ -248,7 +248,7 @@ static void printf(char* str) {
 }
 
 static int main() {
-    char input[14] = { '(', 'x', '-', '9', ')', '*', '(', 'x', '-', '9', ')', '/', '8', '\0' }; 
+    char* input = "(x-9)*(x-9)/8";
 
     // cant do this because display can only do ' ', 'a' - 'z', '.', '!, and '?', (no numbers or symbols that we support)
     //printf(input);

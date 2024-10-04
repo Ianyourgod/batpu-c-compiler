@@ -61,6 +61,7 @@ pub enum TokenType {
     Identifier(String),
     IntegerLiteral(i16),
     CharLiteral(char),
+    StringLiteral(String),
     // End of file
     EOF,
     // Error
@@ -159,13 +160,7 @@ impl Lexer {
             '\'' => {
                 self.read_char();
                 let ch = if self.ch == '\\' {
-                    self.read_char();
-                    match self.ch {
-                        '0' => '\0',
-                        'n' => '\n',
-                        '\\' => '\\',
-                        _ => panic!("invalid char after \\")
-                    }
+                    self.parse_backslash()
                 } else {
                     self.ch
                 };
@@ -175,6 +170,21 @@ impl Lexer {
                 } else {
                     TokenType::Illegal(format!("invalid char literal (expected ' found {:?}", self.ch))
                 }
+            },
+            '"' => {
+                let mut s = String::new();
+
+                self.read_char();
+                while self.ch != '"' {
+                    if self.ch == '\\' {
+                        s.push(self.parse_backslash());
+                    } else {
+                        s.push(self.ch);
+                    }
+                    self.read_char();
+                }
+
+                TokenType::StringLiteral(s)
             },
             '?' => TokenType::QuestionMark,
             ':' => TokenType::Colon,
@@ -219,6 +229,16 @@ impl Lexer {
         self.read_position = read_pos;
         self.ch = ch;
         tok
+    }
+
+    fn parse_backslash(&mut self) -> char {
+        self.read_char();
+        match self.ch {
+            '0' => '\0',
+            'n' => '\n',
+            '\\' => '\\',
+            _ => panic!("invalid char after \\")
+        }
     }
 
     fn skip_whitespace(&mut self) {

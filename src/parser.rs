@@ -825,6 +825,10 @@ impl Parser {
                 self.next_token();
                 nodes::Expression::new(nodes::ExpressionEnum::CharLiteral(ch))
             }
+            TokenType::StringLiteral(s) => {
+                self.next_token();
+                nodes::Expression::new(nodes::ExpressionEnum::StringLiteral(s))
+            }
             TokenType::Keyword(kwd) => {
                 if kwd == "sizeof" {
                     self.next_token();

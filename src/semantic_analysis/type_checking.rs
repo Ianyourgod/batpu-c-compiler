@@ -801,6 +801,10 @@ impl TypeChecker {
                 expr: nodes::ExpressionEnum::CharLiteral(ch),
                 ty: nodes::Type::Char,
             },
+            nodes::ExpressionEnum::StringLiteral(ref s) => nodes::Expression {
+                expr: nodes::ExpressionEnum::StringLiteral(s.clone()),
+                ty: nodes::Type::Pointer(Box::new(nodes::Type::Char)),
+            },
             nodes::ExpressionEnum::IntegerLiteral(_) => expr.clone(),
         }
     }

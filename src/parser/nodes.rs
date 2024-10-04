@@ -93,6 +93,7 @@ impl Expression {
 pub enum ExpressionEnum {
     IntegerLiteral(i16),
     CharLiteral(char),
+    StringLiteral(String),
     Unop(Unop, Box<Expression>),
     Binop(Binop, Box<Expression>, Box<Expression>),
     Var(String),

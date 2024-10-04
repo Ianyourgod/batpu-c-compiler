@@ -431,7 +431,8 @@ impl VariableResolution {
 
                 nodes::ExpressionEnum::Unop(op.clone(), Box::new(src))
             },
-            nodes::ExpressionEnum::IntegerLiteral(_) | nodes::ExpressionEnum::CharLiteral(_) => expr.expr.clone(),
+            nodes::ExpressionEnum::IntegerLiteral(_) | nodes::ExpressionEnum::CharLiteral(_) |
+            nodes::ExpressionEnum::StringLiteral(_) => expr.expr.clone(),
             nodes::ExpressionEnum::Var(ref ident) => {
                 if context.variable_map.contains_key(ident) {
                     nodes::ExpressionEnum::Var(context.variable_map.get(ident).unwrap().name.clone())
