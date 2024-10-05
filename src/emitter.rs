@@ -5,12 +5,14 @@ use crate::code_gen::assembly;
 
 pub struct Emitter {
     program: assembly::Program,
+    include_directives: bool,
 }
 
 impl Emitter {
-    pub fn new(program: assembly::Program) -> Emitter {
+    pub fn new(program: assembly::Program, include_directives: bool) -> Emitter {
         Emitter {
             program,
+            include_directives,
         }
     }
 
@@ -75,7 +77,7 @@ cal .exit
 {}
 {}
 {}
-", if contains_main { "cal .main" } else { "" }, if main_global { ":global" } else { "" },
+", if contains_main { "cal .main" } else { "" }, if main_global && self.include_directives { ":global" } else { "" },
 if uses_mult {
 ".__mult
   LDI r3 0
@@ -161,7 +163,7 @@ adi r2 -1
                     if !func.defined {
                         continue;
                     }
-                    if func.global {
+                    if func.global && self.include_directives {
                         output.push_str(":global\n");
                     }
                     output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
@@ -315,7 +317,7 @@ adi r2 -1
                 format!(".{}", lbl)
             }
             assembly::Instruction::Call(ref lbl, global) => {
-                format!("cal .{}{}", lbl, if *global { ":global" } else { "" })
+                format!("cal .{}{}", lbl, if *global && self.include_directives { ":global" } else { "" })
             }
 
             assembly::Instruction::Comment(ref s) => {

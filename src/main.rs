@@ -32,6 +32,7 @@ pub struct Settings {
     pub do_not_assemble: bool,
     pub include_comments: bool,
     pub dont_optimize: bool,
+    pub include_directives: bool,
 }
 
 fn parse_args() -> Settings {
@@ -45,6 +46,7 @@ fn parse_args() -> Settings {
     let do_not_assemble = false;
     let mut include_comments = false;
     let mut dont_optimize = false;
+    let mut include_directives = false;
 
     args.nth(0);
     while 1 <= args.len() {
@@ -63,6 +65,9 @@ fn parse_args() -> Settings {
             "-n" => {
                 warn!("The -n flag is deprecated, as the assembler has been removed.");
                 //do_not_assemble = true;
+            },
+            "-d" => {
+                include_directives = true;
             },
             "-f" => {
                 include_comments = true;
@@ -94,6 +99,7 @@ fn parse_args() -> Settings {
         do_not_assemble,
         include_comments,
         dont_optimize,
+        include_directives,
     }
 }
 
@@ -151,8 +157,11 @@ fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String,
 */
 
 fn compile(input_file: &String, args: Settings) -> String {
+    // create dir called "tmpcb" to store files
+    std::fs::create_dir_all(".tmpcb").expect("Failed to create directory");
+
     // preprocess input
-    // call "gcc -E -P input_file -o .tmpbc/input_file.i"
+    // call "gcc -E -P input_file -o .tmpcb/input_file.i"
     let mut binding = std::process::Command::new("gcc");
     let out = binding
         .arg("-E")
@@ -199,7 +208,7 @@ fn compile(input_file: &String, args: Settings) -> String {
 
     //println!("{:#?}", assembly);
 
-    let emitter = emitter::Emitter::new(assembly);
+    let emitter = emitter::Emitter::new(assembly, args.include_directives);
     let output = emitter.emit(args.include_comments);
     output
 }

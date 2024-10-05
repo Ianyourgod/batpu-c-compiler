@@ -5,7 +5,7 @@ typedef struct B {
     int a;
 } A;
 
-static int main() {
+int main() {
     A a = {1};
 
     return a.a;
