@@ -549,6 +549,7 @@ impl Parser {
                             };
 
                             let str_decl = if self.lexer.peek_token() == TokenType::LBrace {
+                                self.next_token();
                                 Some(self.parse_struct_declaration(name.clone()))
                             } else { None };
 

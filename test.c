@@ -1,7 +1,7 @@
 static void* malloc(int size);
 static void free(void* pos);
 
-typedef struct {
+typedef struct B {
     int a;
 } A;
 
