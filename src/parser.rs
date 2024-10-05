@@ -93,7 +93,13 @@ impl Parser {
                     i += 1;
                     types.push(nodes::Type::Struct(name));
                 }
-                _ => panic!("Invalid type specifier, {:?}", specifier),
+                kwd => {
+                    if let Some(ty) = self.lexer.get_type_def(kwd) {
+                        types.push(ty.clone());
+                    } else {
+                        panic!("Invalid type specifier, {:?}", specifier);
+                    }
+                },
             }
         };
 
@@ -121,8 +127,15 @@ impl Parser {
                     "void" |
                     "extern" |
                     "static" |
+                    "typedef" | // for the shittery :)
                     "struct" => true,
-                    _ => false,
+                    _ => {
+                        if let Some(_) = self.lexer.get_type_def(kwd) {
+                            true
+                        } else {
+                            false
+                        }
+                    }
                 }
             },
             _ => false,
@@ -307,6 +320,15 @@ impl Parser {
     }
 
     fn parse_declaration(&mut self) -> nodes::Declaration {
+        if let TokenType::Keyword(ref kwd) = self.current_token {
+            if kwd == "typedef" {
+                return match self.parse_typedef() {
+                    Some(decl) => decl,
+                    None => nodes::Declaration::Empty,
+                };
+            }
+        }
+        
         let types = self.parse_types();
 
         if types.is_empty() {
@@ -320,7 +342,10 @@ impl Parser {
             };
 
             if t1_is_ident && self.current_token == TokenType::LBrace {
-                return self.parse_struct_declaration(tag);
+                let st_decl = self.parse_struct_declaration(tag);
+                self.next_token();
+                self.consume(TokenType::Semicolon);
+                return st_decl;
             }
         }
 
@@ -419,7 +444,6 @@ impl Parser {
                     panic!("Expected ';' or '}}', got {:?}", self.current_token);
                 }
             }
-            self.next_token();
 
             if members.is_empty() {
                 panic!("Empty struct declaration");
@@ -435,8 +459,6 @@ impl Parser {
                 members: Vec::new(),
             })
         };
-
-        self.consume(TokenType::Semicolon);
 
         decl
     }
@@ -497,6 +519,68 @@ impl Parser {
                 expr
             },
         }
+    }
+
+    fn parse_typedef(&mut self) -> Option<nodes::Declaration> {
+        self.next_token();
+
+        let (ty, decl) = match self.current_token {
+            TokenType::Keyword(ref kwd) => {
+                match kwd.as_str() {
+                    "int" => (nodes::Type::Int, None),
+                    "char" => (nodes::Type::Char, None),
+                    "void" => (nodes::Type::Void, None),
+
+                    "extern" |
+                    "static" => panic!("Invalid typedef"),
+    
+                    "struct" => {
+                        self.next_token();
+
+                        if self.current_token == TokenType::LBrace {
+                            let tmp_name = format!("__anon_struct_{}", self.lexer.get_type_defs_len());
+                            let decl = self.parse_struct_declaration(tmp_name.clone());
+
+                            (nodes::Type::Struct(tmp_name), Some(decl))
+                        } else {
+                            let name = match self.current_token {
+                                TokenType::Identifier(ref name) => name.clone(),
+                                _ => panic!("Expected identifier, got {:?}", self.current_token),
+                            };
+
+                            let str_decl = if self.lexer.peek_token() == TokenType::LBrace {
+                                Some(self.parse_struct_declaration(name.clone()))
+                            } else { None };
+
+                            (nodes::Type::Struct(name), str_decl)
+                        }
+                    }
+                    ref kwd => {
+                        if let Some(ty) = self.lexer.get_type_def(kwd) {
+                            (ty.clone(), None)
+                        } else {
+                            panic!("Invalid type specifier, {:?}", kwd);
+                        }
+                    },
+                }
+            },
+            _ => panic!("Expected keyword, got {:?}", self.current_token),
+        };
+
+        self.next_token();
+
+        let name = match self.current_token {
+            TokenType::Identifier(ref name) => name.clone(),
+            _ => panic!("Expected identifier, got {:?}", self.current_token),
+        };
+
+        self.next_token();
+
+        self.consume(TokenType::Semicolon);
+
+        self.lexer.add_type_def(name, ty);
+
+        decl
     }
 
     fn parse_if_statement(&mut self) -> nodes::Statement {

@@ -14,13 +14,14 @@ impl LoopLabeling {
     }
 
     pub fn resolve(&mut self) -> nodes::Program {
-        let mut statements: Vec<nodes::Declaration> = Vec::new();
+        let mut statements: Vec<nodes::Declaration> = Vec::with_capacity(self.program.statements.len());
 
         for decl in self.program.statements.clone() {
             let func = match decl {
                 nodes::Declaration::VarDecl(_) |
+                nodes::Declaration::Empty |
                 nodes::Declaration::StructDecl(_) => { statements.push(decl); continue },
-                nodes::Declaration::FuncDecl(fn_decl) => fn_decl
+                nodes::Declaration::FuncDecl(fn_decl) => fn_decl,
             };
 
             let mut body: Vec<nodes::BlockItem> = Vec::new();

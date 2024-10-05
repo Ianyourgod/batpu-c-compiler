@@ -40,6 +40,7 @@ pub enum Declaration {
     VarDecl(VarDecl),
     FuncDecl(FuncDecl),
     StructDecl(StructDecl),
+    Empty,
 }
 
 #[derive(Debug, Clone)]

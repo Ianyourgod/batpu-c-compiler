@@ -111,6 +111,7 @@ impl VariableResolution {
 
                     statements.push(nodes::Declaration::StructDecl(decl));
                 }
+                nodes::Declaration::Empty => statements.push(nodes::Declaration::Empty),
             }
         }
 
@@ -276,6 +277,7 @@ impl VariableResolution {
                     nodes::Declaration::FuncDecl(_) => {
                         panic!("Function declarations not allowed in block items");
                     }
+                    nodes::Declaration::Empty => nodes::BlockItem::Declaration(nodes::Declaration::Empty),
                 }
                 
             },

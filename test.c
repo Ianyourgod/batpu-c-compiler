@@ -1,15 +1,12 @@
 static void* malloc(int size);
 static void free(void* pos);
 
+typedef struct {
+    int a;
+} A;
+
 static int main() {
-    int* a = malloc(4);
-    int* b = malloc(6);
+    A a = {1};
 
-    *a = 10;
-    *b = 20;
-
-    free(a);
-    free(b);
-
-    return *a + *b;
+    return a.a;
 }

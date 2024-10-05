@@ -91,6 +91,7 @@ impl Tacky {
 
                     statements.push(definition::TopLevel::FuncDef(func));
                 }
+                nodes::Declaration::Empty |
                 nodes::Declaration::StructDecl(_) => (),
             }
         }

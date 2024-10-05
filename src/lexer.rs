@@ -1,4 +1,6 @@
-#![allow(dead_code)]
+use std::collections::HashMap;
+
+use super::parser::nodes::Type;
 
 // this macro takes in tuples of the form (String, TokenType). the first tuple is the (0) current char and then (1) what to return if nothing matches
 // for the rest of the tuples, if the current char matches the first element, return the second element
@@ -73,6 +75,7 @@ pub struct Lexer {
     position: usize,
     read_position: usize,
     ch: char,
+    type_defs: HashMap<String, Type>,
 }
 
 impl Lexer {
@@ -82,9 +85,22 @@ impl Lexer {
             position: 0,
             read_position: 0,
             ch: '\0',
+            type_defs: HashMap::new(),
         };
         l.read_char();
         l
+    }
+
+    pub fn add_type_def(&mut self, name: String, ty: Type) {
+        self.type_defs.insert(name, ty);
+    }
+
+    pub fn get_type_def(&self, name: &str) -> Option<&Type> {
+        self.type_defs.get(name)
+    }
+
+    pub fn get_type_defs_len(&self) -> usize {
+        self.type_defs.len()
     }
 
     fn read_char(&mut self) {
@@ -202,12 +218,18 @@ impl Lexer {
                         "if", "else",
                         "while", "for", "do", "break", "continue",
                         "sizeof",
+                        "typedef",
                     ];
+
+                    if self.get_type_def(&ident).is_some() {
+                        return TokenType::Keyword(ident);
+                    }
+
                     if keywords.contains(&ident.as_str()) {
                         return TokenType::Keyword(ident);
-                    } else {
-                        return TokenType::Identifier(ident);
                     }
+
+                    return TokenType::Identifier(ident);
                 } else if is_digit(self.ch) {
                     return TokenType::IntegerLiteral(self.read_number());
                 } else {

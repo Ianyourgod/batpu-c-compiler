@@ -24,6 +24,7 @@ impl TypeChecker {
                 nodes::Declaration::VarDecl(var_decl) => nodes::Declaration::VarDecl(self.typecheck_file_scope_variable_declaration(&var_decl)),
                 nodes::Declaration::FuncDecl(func) => self.typecheck_function_declaration(&func),
                 nodes::Declaration::StructDecl(struct_decl) => self.typecheck_struct_declaration(&struct_decl),
+                nodes::Declaration::Empty => nodes::Declaration::Empty,
             });
         }
 
@@ -935,6 +936,7 @@ impl TypeChecker {
         match stmt {
             BlockItem::Declaration(decl) => {
                 BlockItem::Declaration(match decl {
+                    nodes::Declaration::Empty => nodes::Declaration::Empty,
                     nodes::Declaration::FuncDecl(fn_decl) => self.typecheck_function_declaration(fn_decl),
                     nodes::Declaration::VarDecl(var_decl) => self.typecheck_variable_declaration(var_decl),
                     nodes::Declaration::StructDecl(struct_decl) => self.typecheck_struct_declaration(struct_decl),
