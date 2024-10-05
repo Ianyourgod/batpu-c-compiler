@@ -3,6 +3,7 @@
 ![GitHub watchers](https://img.shields.io/github/watchers/ianyourgod/batpu-c-compiler?style=for-the-badge&color=7137ef)
 ![GitHub Repo stars](https://img.shields.io/github/stars/ianyourgod/batpu-c-compiler?style=for-the-badge&color=efac37)
 ![GitHub forks](https://img.shields.io/github/forks/ianyourgod/batpu-c-compiler?style=for-the-badge)
+![Static Badge](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 ## The BatPU C Compiler
 
