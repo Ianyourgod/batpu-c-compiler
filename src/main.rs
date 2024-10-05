@@ -1,4 +1,5 @@
 use std::{collections::HashMap, process::exit};
+use color_print::cformat;
 
 mod lexer;
 mod parser;
@@ -7,6 +8,20 @@ mod tacky;
 mod optimizations;
 mod code_gen;
 mod emitter;
+
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        eprintln!("{}", cformat!("<yellow>[WARNING] {}</>", format_args!($($arg)*)));
+    };
+}
+
+#[allow(unused_macros)]
+macro_rules! error {
+    ($($arg:tt)*) => {
+        eprintln!("{}", cformat!("<red>[ERROR] {}</>", format_args!($($arg)*)));
+        exit(0);
+    };
+}
 
 #[derive(Clone)]
 pub struct Settings {
@@ -27,7 +42,7 @@ fn parse_args() -> Settings {
     let mut link_files = Vec::new();
     let mut output_name = String::new();
     let mut do_not_link = false;
-    let mut do_not_assemble = false;
+    let do_not_assemble = false;
     let mut include_comments = false;
     let mut dont_optimize = false;
 
@@ -46,7 +61,8 @@ fn parse_args() -> Settings {
                 link_files.push(args.nth(0).unwrap());
             },
             "-n" => {
-                do_not_assemble = true;
+                warn!("The -n flag is deprecated, as the assembler has been removed.");
+                //do_not_assemble = true;
             },
             "-f" => {
                 include_comments = true;
@@ -64,10 +80,10 @@ fn parse_args() -> Settings {
         panic!("No input files provided");
     }
 
-    output_name = if do_not_assemble && output_name.is_empty() {
+    output_name = if output_name.is_empty() {
         "output.as".to_string()
     } else {
-        "output.mc".to_string()
+        output_name
     };
 
     Settings {
@@ -89,6 +105,7 @@ fn _test_lexer(input: String) {
     }
 }
 
+/*
 fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String, do_not_link: bool) {
     // create dir called "tmpcb" to store files
     std::fs::create_dir_all(".tmpcb").expect("Failed to create directory");
@@ -131,6 +148,7 @@ fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String,
         std::fs::remove_dir_all(".tmpcb").expect("Failed to remove directory");
     }
 }
+*/
 
 fn compile(input_file: &String, args: Settings) -> String {
     // preprocess input
@@ -197,10 +215,12 @@ fn main() {
         outputs.push(output);
     }
 
-    if !args.do_not_assemble {
+    /*if !args.do_not_assemble {
+        
+        
         assemble(outputs, args.link_files, args.output_name, args.do_not_link);
-    } else {
+    } else { */
         // write it to file
         std::fs::write(args.output_name, outputs.join("\n")).expect("Failed to write to file");
-    }
+    //}
 }
