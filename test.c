@@ -1,6 +1,15 @@
-static void mem_write(int addr, int val);
-static int mem_read(int addr);
+static void* malloc(int size);
+static void free(void* pos);
 
 static int main() {
-    return 13 / 4;
+    int* a = malloc(4);
+    int* b = malloc(6);
+
+    *a = 10;
+    *b = 20;
+
+    free(a);
+    free(b);
+
+    return *a + *b;
 }

@@ -128,17 +128,32 @@ mov r2 r1
 adi r1 -1
 ret" } else { "" },
 if uses_free {
-// TODO: rewrite this. it doesnt work.
+// we loop until cur_pos + *cur_pos == given pointer
 ".free
-lod r1 r2 -1
-.free.loop1
-str r1 r0 -1
-adi r1 1
+ldi r2 0
+.free.l1
+    lod r2 r3
+    add r2 r3 r4
+    adi r4 -1
+    cmp r1 r4
+    brh eq .free.el1
+    cmp r3 r0
+    brh eq .free.i1
+    add r2 r3 r2
+    jmp .free.l1
+    .free.i1
+    adi r2 1
+    jmp .free.l1
+.free.el1
+// now from r2 to r1 is the block we want to free
+// we set the block to 0
 adi r2 -1
-cmp r2 r0
-brh ne .free.loop1
-ret
-"
+.free.l2
+    adi r2 1
+    str r2 r0 0
+    cmp r2 r1
+    brh ne .free.l2
+    ret"
 } else { "" });
         for tl in &self.program.statements {
             match tl {
