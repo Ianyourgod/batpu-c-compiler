@@ -1,5 +1,9 @@
 # BCC
 
+![GitHub watchers](https://img.shields.io/github/watchers/ianyourgod/batpu-c-compiler?style=for-the-badge&color=7137ef)
+![GitHub Repo stars](https://img.shields.io/github/stars/ianyourgod/batpu-c-compiler?style=for-the-badge&color=efac37)
+![GitHub forks](https://img.shields.io/github/forks/ianyourgod/batpu-c-compiler?style=for-the-badge)
+
 ### The BatPU C Compiler
 
 BCC is a C compiler for the BatPU architecture. It is based off of "Writing a C Compiler" by Nora Sandler, and is written in Rust.
