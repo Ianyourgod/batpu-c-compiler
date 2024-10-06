@@ -41,8 +41,6 @@ impl ConstantFolding {
                             definition::Binop::Nor => !(val1 | val2),
                         };
 
-                        println!("Folding {:?} {:?} {:?} = {:?}", val1, op, val2, result);
-
                         out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));
                     } else {
                         out.push(instruction.clone());
