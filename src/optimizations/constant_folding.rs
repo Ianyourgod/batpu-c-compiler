@@ -41,13 +41,28 @@ impl ConstantFolding {
                             definition::Binop::Nor => !(val1 | val2),
                         };
 
+                        println!("Folding {:?} {:?} {:?} = {:?}", val1, op, val2, result);
+
                         out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));
                     } else {
                         out.push(instruction.clone());
                     }
                 },
-                definition::Instruction::Unary(ref _op, ref _src, ref _dest) => {
-                    out.push(instruction.clone()); // TODO: implement unary constant folding
+                definition::Instruction::Unary(ref op, ref src, ref dest) => {
+                    let (is_const, val) = self.is_constant(src);
+
+                    if is_const {
+                        let result = match op {
+                            definition::Unop::Negate => -val,
+                            definition::Unop::BitwiseNot => !val,
+                            definition::Unop::LogicalNot => if val == 0 { 1 } else { 0 },
+                            definition::Unop::AddImm => val+1,
+                        };
+
+                        out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));
+                    } else {
+                        out.push(instruction.clone());
+                    }
                 },
                 definition::Instruction::AddPtr(val1, val2, offset, dst) => {
                     if *offset == 1 {
