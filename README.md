@@ -39,8 +39,10 @@ You may also choose not to build. Compiling will be slightly slower, but not tha
 To compile a C file when you've built, run the following command:
 
 ```sh
-target/release/bcc <input_file> -o <output_file>
+<compiler executible> <input_file> -o <output_file>
 ```
+
+Compiler executible could be `target/release/bcc` if you built it yourself, or 'c-compiler' if you're using the prebuilt binary.
 
 To compile a C file without building, run the following command:
 
