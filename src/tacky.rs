@@ -264,8 +264,8 @@ impl Tacky {
             nodes::Binop::Subtract => definition::Binop::Subtract,
             nodes::Binop::Multiply => definition::Binop::Multiply,
             nodes::Binop::Divide => definition::Binop::Divide,
-            nodes::Binop::And => definition::Binop::And,
-            nodes::Binop::Or => definition::Binop::Or,
+            nodes::Binop::And => definition::Binop::LogicalAnd,
+            nodes::Binop::Or => definition::Binop::LogicalOr,
             nodes::Binop::Equal => definition::Binop::Equal,
             nodes::Binop::NotEqual => definition::Binop::NotEqual,
             nodes::Binop::LessThan => definition::Binop::LessThan,
@@ -274,6 +274,9 @@ impl Tacky {
             nodes::Binop::GreaterThanEqual => definition::Binop::GreaterThanEqual,
             nodes::Binop::LeftShift => definition::Binop::LeftShift,
             nodes::Binop::RightShift => definition::Binop::RightShift,
+            nodes::Binop::BitwiseAnd => definition::Binop::BitwiseAnd,
+            nodes::Binop::BitwiseXor => definition::Binop::BitwiseXor,
+            nodes::Binop::BitwiseOr => unreachable!("INTERNAL ERROR. PLEASE REPORT: BitwiseOr should be converted"),
         }
     }
 
@@ -305,6 +308,16 @@ impl Tacky {
             nodes::ExpressionEnum::Binop(op, ref lft, ref rht) => {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), lft.ty.clone());
+
+                if *op == nodes::Binop::BitwiseOr {
+                    // convert this to not(nor(left, rht))
+                    let left = self.emit_tacky_and_convert(&lft.expr, body, ty);
+                    let right = self.emit_tacky_and_convert(&rht.expr, body, ty);
+
+                    body.push(definition::Instruction::Binary(definition::Binop::Nor, left.clone(), right.clone(), dest.clone()));
+                    body.push(definition::Instruction::Unary(definition::Unop::BitwiseNot, dest.clone(), dest.clone()));
+                    return dest;
+                }
 
                 let tacky_op = self.convert_binop(op);
 

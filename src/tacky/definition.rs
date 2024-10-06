@@ -61,8 +61,8 @@ pub enum Binop {
     Subtract,
     Multiply,
     Divide,
-    And,
-    Or,
+    LogicalAnd,
+    LogicalOr,
     Equal,
     NotEqual,
     LessThan,
@@ -71,4 +71,7 @@ pub enum Binop {
     GreaterThanEqual,
     LeftShift,
     RightShift,
+    BitwiseAnd,
+    BitwiseXor,
+    Nor,
 }

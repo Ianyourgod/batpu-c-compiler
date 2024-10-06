@@ -734,6 +734,9 @@ impl Parser {
             TokenType::LessThan | TokenType::GreaterThan |
             TokenType::LessThanEqual | TokenType::GreaterThanEqual => 35,
             TokenType::Equal | TokenType::NotEqual => 30,
+            TokenType::Ampersand => 28,
+            TokenType::BitwiseXor => 27,
+            TokenType::BitwiseOr => 26,
             TokenType::LogicalAnd => 25,
             TokenType::LogicalOr => 20,
             TokenType::QuestionMark => 5,
@@ -759,6 +762,9 @@ impl Parser {
             TokenType::RightShift => nodes::Binop::RightShift,
             TokenType::Star => nodes::Binop::Multiply,
             TokenType::Slash => nodes::Binop::Divide,
+            TokenType::Ampersand => nodes::Binop::BitwiseAnd,
+            TokenType::BitwiseOr => nodes::Binop::BitwiseOr,
+            TokenType::BitwiseXor => nodes::Binop::BitwiseXor,
             _ => panic!("Unknown token: {:?}", token),
         }
     }

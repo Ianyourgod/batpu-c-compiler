@@ -76,6 +76,8 @@ pub enum Binop {
     Add,
     Subtract,
     Nor,
+    And,
+    Xor,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

@@ -24,8 +24,8 @@ impl ConstantFolding {
                         let result = match op {
                             definition::Binop::Add => val1 + val2,
                             definition::Binop::Subtract => val1 - val2,
-                            definition::Binop::And => val1 & val2,
-                            definition::Binop::Or => val1 | val2,
+                            definition::Binop::LogicalAnd => val1 & val2,
+                            definition::Binop::LogicalOr => val1 | val2,
                             definition::Binop::Equal => if val1 == val2 { 1 } else { 0 },
                             definition::Binop::NotEqual => if val1 != val2 { 1 } else { 0 },
                             definition::Binop::LessThan => if val1 < val2 { 1 } else { 0 },
@@ -36,6 +36,9 @@ impl ConstantFolding {
                             definition::Binop::RightShift => val1 >> val2,
                             definition::Binop::Multiply => val1 * val2,
                             definition::Binop::Divide => val1 / val2,
+                            definition::Binop::BitwiseAnd => val1 & val2,
+                            definition::Binop::BitwiseXor => val1 ^ val2,
+                            definition::Binop::Nor => !(val1 | val2),
                         };
 
                         out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));

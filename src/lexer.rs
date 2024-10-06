@@ -36,6 +36,8 @@ pub enum TokenType {
     QuestionMark,
     Colon,
     Ampersand,
+    BitwiseOr,
+    BitwiseXor,
     // Assignment operators
     Equals,
     AddAssign,
@@ -160,9 +162,10 @@ impl Lexer {
                 ('&', TokenType::LogicalAnd)
             ),
             '|' => after_char!(self, self.peek_char(),
-                TokenType::Illegal("Invalid char after '|'".to_string()),
+                TokenType::BitwiseOr,
                 ('|', TokenType::LogicalOr)
             ),
+            '^' => TokenType::BitwiseXor,
             '<' => after_char!(self, self.peek_char(),
                 TokenType::LessThan,
                 ('=', TokenType::LessThanEqual),

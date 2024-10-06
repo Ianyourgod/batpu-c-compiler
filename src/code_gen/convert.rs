@@ -603,7 +603,10 @@ impl ConvertPass {
         match op {
             definition::Binop::Add => assembly::Binop::Add,
             definition::Binop::Subtract => assembly::Binop::Subtract,
-            _ => unreachable!("{:?}", op)
+            definition::Binop::BitwiseAnd => assembly::Binop::And,
+            definition::Binop::BitwiseXor => assembly::Binop::Xor,
+            definition::Binop::Nor => assembly::Binop::Nor,
+            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: op {:?} reached", op)
         }
     }
 }

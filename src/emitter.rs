@@ -231,6 +231,8 @@ adi r2 -1
             assembly::Binop::Add => "add",
             assembly::Binop::Subtract => "sub",
             assembly::Binop::Nor => "nor",
+            assembly::Binop::And => "and",
+            assembly::Binop::Xor => "xor",
         }.to_string()
     }
 

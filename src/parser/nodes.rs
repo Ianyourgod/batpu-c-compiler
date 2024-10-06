@@ -120,7 +120,7 @@ pub enum Unop {
     LogicalNot,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Binop {
     Add,
     Subtract,
@@ -136,6 +136,9 @@ pub enum Binop {
     GreaterThanEqual,
     LeftShift,
     RightShift,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
 }
 
 #[derive(Debug, Clone)]
