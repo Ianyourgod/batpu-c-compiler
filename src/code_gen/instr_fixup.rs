@@ -106,7 +106,6 @@ impl InstructionFixupPass {
                 if *val == 0 {
                     return assembly::Register::new("r0".to_string());
                 }
-                // TODO: rewrite this function so that if val is zero have the caller just use r0
 
                 instructions.push(assembly::Instruction::Ldi(
                     assembly::Operand::Register(reg.clone()),
@@ -270,7 +269,14 @@ impl InstructionFixupPass {
                         _ => (false, assembly::Operand::Immediate(0), 0)
                     };
 
-                    // TODO: make add(a, 0, b) into mov(a, b)
+                    if is_adi_op.1 && is_imm_and_reg.0 && is_imm_and_reg.2 == 0 {
+                        // yay we can do mov!!
+                        instructions.push(assembly::Instruction::Mov(
+                            is_imm_and_reg.1.clone(),
+                            dst.clone(),
+                        ));
+                        return;
+                    }
 
                     if is_adi_op.0 && is_imm_and_reg.0 && *dst == is_imm_and_reg.1 {
                         // yay we can do adi!!

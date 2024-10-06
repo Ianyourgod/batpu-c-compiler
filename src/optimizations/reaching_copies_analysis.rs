@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{optimizations::cfg, tacky::definition};
 
 pub struct ReachingCopiesAnalysis {
@@ -6,21 +8,19 @@ pub struct ReachingCopiesAnalysis {
     aliased_vars: Vec<definition::Val>,
 }
 
-// TODO: make these vecs hashmaps
-
 #[derive(Clone, Debug)]
 pub struct Annotations {
-    pub block_annotations: Vec<(cfg::NodeID, Annotation)>,
-    pub instruction_annotations: Vec<(cfg::NodeID, usize, Annotation)>,
+    pub block_annotations: HashMap<cfg::NodeID, Annotation>,
+    pub instruction_annotations: HashMap<(cfg::NodeID, usize), Annotation>,
 }
 
 impl Annotations {
     pub fn get_block_annotation(&self, id: &cfg::NodeID) -> Option<&Annotation> {
-        self.block_annotations.iter().find(|(block_id, _)| block_id == id).map(|(_, annotation)| annotation)
+        self.block_annotations.get(id)
     }
 
-    pub fn get_instruction_annotation(&self, id: &cfg::NodeID, idx: usize) -> Option<&Annotation> {
-        self.instruction_annotations.iter().find(|(block_id, index, _)| block_id == id && index == &idx).map(|(_, _, annotation)| annotation)
+    pub fn get_instruction_annotation(&self, id: &(cfg::NodeID, usize)) -> Option<&Annotation> {
+        self.instruction_annotations.get(id)
     }
 }
 
@@ -34,8 +34,8 @@ impl ReachingCopiesAnalysis {
         ReachingCopiesAnalysis {
             cfg,
             annotations: Annotations {
-                block_annotations: Vec::new(),
-                instruction_annotations: Vec::new(),
+                block_annotations: HashMap::new(),
+                instruction_annotations: HashMap::new(),
             },
             aliased_vars,
         }
@@ -77,7 +77,7 @@ impl ReachingCopiesAnalysis {
         let (id, instructions) = match node {
             cfg::Node::Entry(id, _) |
             cfg::Node::Exit(id, _) => {
-                self.annotations.block_annotations.push((id.clone(), current_reaching_copies.clone()));
+                self.annotations.block_annotations.insert(id.clone(), current_reaching_copies.clone());
                 return;
             }
             cfg::Node::BasicBlock(id, instructions, _, _) => {
@@ -86,7 +86,7 @@ impl ReachingCopiesAnalysis {
         };
 
         for (i, instruction) in instructions.iter().enumerate() {
-            self.annotations.instruction_annotations.push((id.clone(), i, current_reaching_copies.clone()));
+            self.annotations.instruction_annotations.insert((id.clone(), i), current_reaching_copies.clone());
 
             match instruction {
                 definition::Instruction::Copy(dst, src) => {
@@ -126,7 +126,7 @@ impl ReachingCopiesAnalysis {
             }
         }
 
-        self.annotations.block_annotations.push((id.clone(), current_reaching_copies.clone()));
+        self.annotations.block_annotations.insert(id.clone(), current_reaching_copies.clone());
     }
 
     fn meet(&mut self, block: &cfg::Node, all_copies: &Vec<(definition::Val, definition::Val)>) -> Vec<(definition::Val, definition::Val)> {
@@ -179,7 +179,7 @@ impl ReachingCopiesAnalysis {
                 cfg::Node::Exit(_, _) => continue,
                 cfg::Node::BasicBlock(id, _, _, _) => {
                     worklist.push(id.clone());
-                    self.annotations.block_annotations.push((id.clone(), all_copies.clone()));
+                    self.annotations.block_annotations.insert(id.clone(), all_copies.clone());
                 }
             }
         }
@@ -226,7 +226,7 @@ impl ReachingCopiesAnalysis {
     }
 
     fn rewrite_instruction(&self, block_id: &cfg::NodeID, idx: usize, instruction: &definition::Instruction) -> Option<definition::Instruction> {
-        let reaching_copies = self.annotations.get_instruction_annotation(block_id, idx).unwrap();
+        let reaching_copies = self.annotations.get_instruction_annotation(&(*block_id, idx)).unwrap();
 
         match instruction {
             definition::Instruction::Copy(dst, src) => {
