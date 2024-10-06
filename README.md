@@ -18,6 +18,7 @@ BCC is a C compiler for the BatPU architecture. It is based off of "Writing a C 
     - [Usage](#usage)
     - [License](#license)
     - [Contributing](#contributing)
+    - [Feature Requests](#feature-requests)
     - [Acknowledgements](#acknowledgements)
 
 ### Building
@@ -57,6 +58,10 @@ BCC is licensed under the MIT License. See [LICENSE](LICENSE) for more informati
 ### Contributing
 
 If you would like to contribute to BCC, please read [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
+
+### Feature Requests
+
+If you would like to request a feature, please open an issue with the `feature-request` label.
 
 ### Acknowledgements
 
