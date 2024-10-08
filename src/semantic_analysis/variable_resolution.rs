@@ -452,6 +452,16 @@ impl VariableResolution {
 
                 nodes::ExpressionEnum::Assign(Box::new(lhs), Box::new(rhs))
             },
+            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs) => {
+                if !self.is_valid_lvalue(&**lhs) {
+                    panic!("Invalid lvalue");
+                }
+
+                let lhs = self.resolve_expression(lhs, context);
+                let rhs = self.resolve_expression(rhs, context);
+
+                nodes::ExpressionEnum::OpAssign(op, Box::new(lhs), Box::new(rhs))
+            },
             nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
                 let cond = Box::new(self.resolve_expression(&**cond, context));
                 let lft = Box::new(self.resolve_expression(&**lft, context));

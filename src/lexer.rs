@@ -40,8 +40,12 @@ pub enum TokenType {
     BitwiseXor,
     // Assignment operators
     Equals,
+    
     AddAssign,
     SubAssign,
+    MulAssign,
+    DivAssign,
+
     Increment,
     Decrement,
     // Logical & Relational operators
@@ -146,8 +150,14 @@ impl Lexer {
                 ('-', TokenType::Decrement),
                 ('>', TokenType::Arrow)
             ),
-            '*' => TokenType::Star,
-            '/' => TokenType::Slash,
+            '*' => after_char!(self, self.peek_char(),
+                TokenType::Star,
+                ('=', TokenType::MulAssign)
+            ),
+            '/' => after_char!(self, self.peek_char(),
+                TokenType::Slash,
+                ('=', TokenType::DivAssign)
+            ),
             '~' => TokenType::Tilde,
             '=' => after_char!(self, self.peek_char(),
                 TokenType::Equals,

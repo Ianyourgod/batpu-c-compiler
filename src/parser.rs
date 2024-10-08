@@ -773,6 +773,8 @@ impl Parser {
         match token {
             TokenType::AddAssign => (true, nodes::Binop::Add),
             TokenType::SubAssign => (true, nodes::Binop::Subtract),
+            TokenType::MulAssign => (true, nodes::Binop::Multiply),
+            TokenType::DivAssign => (true, nodes::Binop::Divide),
             _ => (false, nodes::Binop::Add),
         }
     }
@@ -789,18 +791,7 @@ impl Parser {
                 expr = nodes::Expression::new(nodes::ExpressionEnum::Assign(Box::new(expr), Box::new(self.parse_expression(prec))));
             } else if (is_op_assign = self.is_op_assign(&self.current_token), is_op_assign.0).1 {
                 self.next_token();
-                expr = nodes::Expression::new(
-                    nodes::ExpressionEnum::Assign(
-                        Box::new(expr.clone()),
-                        Box::new(nodes::Expression::new(
-                            nodes::ExpressionEnum::Binop(
-                                is_op_assign.1,
-                                Box::new(expr),
-                                Box::new(self.parse_expression(prec))
-                            )
-                        ))
-                    )
-                );
+                expr = nodes::Expression::new(nodes::ExpressionEnum::OpAssign(is_op_assign.1, Box::new(expr), Box::new(self.parse_expression(prec))));
             } else if self.current_token == TokenType::QuestionMark {
                 self.next_token();
                 let middle = self.parse_expression(0);

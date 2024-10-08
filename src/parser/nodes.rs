@@ -99,6 +99,7 @@ pub enum ExpressionEnum {
     Binop(Binop, Box<Expression>, Box<Expression>),
     Var(String),
     Assign(Box<Expression>, Box<Expression>), // lvalues :scream:
+    OpAssign(Binop, Box<Expression>, Box<Expression>),
     Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
     Increment(Box<Expression>),
     Decrement(Box<Expression>),

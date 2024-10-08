@@ -377,6 +377,47 @@ impl Tacky {
                     }
                 }
             }
+            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs) => {
+                let lval = self.emit_expression(&lhs.expr, body, &lhs.ty);
+                let rval = self.emit_tacky_and_convert(&rhs.expr, body, ty);
+
+                let using_lval = match lval {
+                    definition::Val::DereferencedPtr(ref ptr) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::Load(*ptr.clone(), dest.clone()));
+                        dest
+                    },
+                    definition::Val::SubObject(ref var, offset) => {
+                        let dest_name = self.make_temporary();
+                        let dest = definition::Val::Var(dest_name.clone(), ty.clone());
+                        body.push(definition::Instruction::CopyFromOffset(definition::Val::Var(var.0.clone(), var.1.clone()), offset, dest.clone()));
+                        dest
+                    }
+                    _ => lval.clone(),
+                };
+
+                let tacky_op = self.convert_binop(op);
+                let tmp = self.make_temporary();
+                let tmp_val = definition::Val::Var(tmp.clone(), ty.clone());
+
+                body.push(definition::Instruction::Binary(tacky_op, using_lval.clone(), rval.clone(), tmp_val.clone()));
+
+                match lval {
+                    definition::Val::DereferencedPtr(ref ptr) => {
+                        body.push(definition::Instruction::Store(tmp_val.clone(), *ptr.clone()));
+                        return tmp_val;
+                    }
+                    definition::Val::SubObject((var, ty), offset) => {
+                        body.push(definition::Instruction::CopyToOffset(tmp_val.clone(), definition::Val::Var(var, ty), offset));
+                        return tmp_val;
+                    }
+                    _ => {
+                        body.push(definition::Instruction::Copy(lval.clone(), tmp_val));
+                        return lval;
+                    }
+                }
+            }
             nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
                 let e2_label = self.make_temporary();
                 let end_label = self.make_temporary();

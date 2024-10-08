@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "c-compiler"
+name = "bcc"
 version = "0.1.0"
 dependencies = [
  "color-print",

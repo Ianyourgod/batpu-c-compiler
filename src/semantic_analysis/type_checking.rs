@@ -495,6 +495,27 @@ impl TypeChecker {
                     ty,
                 }
             },
+            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs) => {
+                let lft = self.typecheck_and_convert(&*lhs);
+                let rht = self.typecheck_and_convert(&*rhs);
+
+                if lft.ty != rht.ty {
+                    panic!("Incompatible types in assignment, {:?} and {:?}", lft.ty, rht.ty);
+                }
+
+                if !self.is_lvalue(&lft) {
+                    panic!("Assignment to non-lvalue");
+                }
+
+                let ty = lft.ty.clone();
+
+                let right = self.convert_by_assignment(&rht, &ty);
+
+                nodes::Expression {
+                    expr: nodes::ExpressionEnum::OpAssign(op, Box::new(lft), Box::new(right)),
+                    ty,
+                }
+            },
             nodes::ExpressionEnum::Conditional(ref cond, ref then, ref els) => {
                 let cond = self.typecheck_and_convert(&*cond);
                 let then = self.typecheck_and_convert(&*then);

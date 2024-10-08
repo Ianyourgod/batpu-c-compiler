@@ -67,6 +67,7 @@ If you would like to request a feature, please open an issue with the `feature-r
 
 ### Acknowledgements
 
+- [BatPU Emulator](https://github.com/AdoHTQ/Batpu2-VM) by AdoHTQ
 - [Writing a C Compiler](https://norasandler.com/2024/08/20/The-Book-Is-Here.html) by Nora Sandler
 - [Rust](https://www.rust-lang.org/)
 - [Me](https://github.com/ianyourgod)
