@@ -1,5 +1,4 @@
 use std::{collections::HashMap, process::exit};
-use color_print::cformat;
 
 mod lexer;
 mod parser;
@@ -9,19 +8,7 @@ mod optimizations;
 mod code_gen;
 mod emitter;
 
-macro_rules! warn {
-    ($($arg:tt)*) => {
-        eprintln!("{}", cformat!("<yellow>[WARNING] {}</>", format_args!($($arg)*)));
-    };
-}
-
-#[allow(unused_macros)]
-macro_rules! error {
-    ($($arg:tt)*) => {
-        eprintln!("{}", cformat!("<red>[ERROR] {}</>", format_args!($($arg)*)));
-        exit(0);
-    };
-}
+mod errors;
 
 #[derive(Clone)]
 pub struct Settings {
@@ -63,7 +50,7 @@ fn parse_args() -> Settings {
                 link_files.push(args.nth(0).unwrap());
             },
             "-n" => {
-                warn!("The -n flag is deprecated, as the assembler has been removed.");
+                errors::external_warn("The -n flag is deprecated, as the assembler has been removed.");
                 //do_not_assemble = true;
             },
             "-d" => {
@@ -100,14 +87,6 @@ fn parse_args() -> Settings {
         include_comments,
         dont_optimize,
         include_directives,
-    }
-}
-
-fn _test_lexer(input: String) {
-    let mut lexer = lexer::Lexer::new(input);
-    let mut current_token = lexer.next_token();
-    while current_token != lexer::TokenType::EOF {
-        current_token = lexer.next_token();
     }
 }
 
@@ -156,7 +135,7 @@ fn assemble(inputs: Vec<String>, object_files: Vec<String>, output_name: String,
 }
 */
 
-fn compile(input_file: &String, args: Settings) -> String {
+fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error> {
     // create dir called "tmpcb" to store files
     std::fs::create_dir_all(".tmpcb").expect("Failed to create directory");
 
@@ -174,7 +153,7 @@ fn compile(input_file: &String, args: Settings) -> String {
 
     // check if it errored
     if !out.status.success() {
-        println!("PREPROCESSOR ERROR: {}", String::from_utf8(out.stderr).unwrap());
+        errors::external_error(&format!("Failed to preprocess file {}\ngcc: {}", input_file, String::from_utf8(out.stderr).unwrap()));
         exit(1);
     }
 
@@ -182,8 +161,8 @@ fn compile(input_file: &String, args: Settings) -> String {
     let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_file)).expect("Failed to read file");
 
     let lexer = lexer::Lexer::new(input);
-    let mut parser = parser::Parser::new(lexer);
-    let program = parser.parse_program();
+    let mut parser = parser::Parser::new(lexer)?;
+    let program = parser.parse_program()?;
 
     //println!("{:#?}", program.statements.get(15));
     
@@ -210,7 +189,8 @@ fn compile(input_file: &String, args: Settings) -> String {
 
     let emitter = emitter::Emitter::new(assembly, args.include_directives);
     let output = emitter.emit(args.include_comments);
-    output
+    
+    Ok(output)
 }
 
 fn main() {
@@ -220,6 +200,16 @@ fn main() {
     let mut outputs = Vec::new();
     for input_name in &args.input_names {
         let output = compile(input_name, args.clone());
+
+        let output = match output {
+            Ok(output) => output,
+            Err(err) => {
+                let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_name)).expect("Failed to read file");
+                let lines: Vec<&str> = input.split('\n').collect();
+                err.print(&lines[err.line - 1], input_name);
+                exit(1);
+            },
+        };
 
         outputs.push(output);
     }

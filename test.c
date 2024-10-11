@@ -1,3 +1,10 @@
+struct Abc {
+    int a;
+    int b;
+};
+
 int main() {
-    return 2 | 4;
+    struct Abc abc = {'a', 2};
+
+    return abc.a;
 }
