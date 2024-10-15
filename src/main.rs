@@ -69,7 +69,8 @@ fn parse_args() -> Settings {
     }
 
     if input_names.is_empty() {
-        panic!("No input files provided");
+        errors::external_error("No input files provided");
+        exit(1);
     }
 
     output_name = if output_name.is_empty() {
@@ -167,7 +168,7 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     //println!("{:#?}", program.statements.get(15));
     
     #[allow(unused_variables)]
-    let (program, symbol_table, type_table) = semantic_analysis::resolve(program);
+    let (program, symbol_table, type_table) = semantic_analysis::resolve(program)?;
 
     //println!("{:#?}", program);
 

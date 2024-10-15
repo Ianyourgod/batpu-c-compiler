@@ -4,7 +4,7 @@ struct Abc {
 };
 
 int main() {
-    struct Abc abc = {'a', 2};
+    struct Abc abc = {1, 2};
 
-    return abc.a;
+    return abcd.a;
 }

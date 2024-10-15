@@ -12,47 +12,77 @@ pub struct FuncDecl {
     pub body: Vec<BlockItem>,
     pub storage_class: StorageClass,
     pub ty: Type,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Return(Option<Expression>),
-    Expression(Expression),
-    If(Expression, Box<Statement>, Box<Option<Statement>>),
-    Compound(Vec<BlockItem>),
-    Break(String),
-    Continue(String),
-    While(Expression, Box<Statement>, String),
-    DoWhile(Box<Statement>, Expression, String),
-    For(ForInit, Option<Expression>, Option<Expression>, Box<Statement>, String),
-    Empty,
+    Return(Option<Expression>, usize),
+    Expression(Expression, usize),
+    If(Expression, Box<Statement>, Box<Option<Statement>>, usize),
+    Compound(Vec<BlockItem>, usize),
+    Break(String, usize),
+    Continue(String, usize),
+    While(Expression, Box<Statement>, String, usize),
+    DoWhile(Box<Statement>, Expression, String, usize),
+    For(ForInit, Option<Expression>, Option<Expression>, Box<Statement>, String, usize),
+    Empty(usize),
+}
+
+impl Statement {
+    pub fn line(&self) -> usize {
+        match self {
+            Statement::Return(_, line) => *line,
+            Statement::Expression(_, line) => *line,
+            Statement::If(_, _, _, line) => *line,
+            Statement::Compound(_, line) => *line,
+            Statement::Break(_, line) => *line,
+            Statement::Continue(_, line) => *line,
+            Statement::While(_, _, _, line) => *line,
+            Statement::DoWhile(_, _, _, line) => *line,
+            Statement::For(_, _, _, _, _, line) => *line,
+            Statement::Empty(line) => *line,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum ForInit {
-    Declaration(Declaration),
-    Expression(Expression),
-    Empty,
+    Declaration(Declaration, usize),
+    Expression(Expression, usize),
+    Empty(usize),
+}
+
+impl ForInit {
+    pub fn line(&self) -> usize {
+        match self {
+            ForInit::Declaration(_, line) => *line,
+            ForInit::Expression(_, line) => *line,
+            ForInit::Empty(line) => *line,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Declaration {
-    VarDecl(VarDecl),
-    FuncDecl(FuncDecl),
-    StructDecl(StructDecl),
-    Empty,
+    VarDecl(VarDecl, usize),
+    FuncDecl(FuncDecl, usize),
+    StructDecl(StructDecl, usize),
+    Empty(usize),
 }
 
 #[derive(Debug, Clone)]
 pub struct StructDecl {
     pub tag: String,
     pub members: Vec<MemberDecl>,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct MemberDecl {
     pub name: String,
     pub ty: Type,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -61,57 +91,105 @@ pub struct VarDecl {
     pub expr: Option<Initializer>,
     pub storage_class: StorageClass,
     pub ty: Type,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone)]
 pub enum Initializer {
-    Single(Expression),
-    Compound(Vec<Initializer>),
+    Single(Expression, usize),
+    Compound(Vec<Initializer>, usize),
+}
+
+impl Initializer {
+    pub fn line(&self) -> usize {
+        match self {
+            Initializer::Single(_, line) => *line,
+            Initializer::Compound(_, line) => *line,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum BlockItem {
-    Declaration(Declaration),
-    Statement(Statement),
+    Declaration(Declaration, usize),
+    Statement(Statement, usize),
+}
+
+impl BlockItem {
+    pub fn line(&self) -> usize {
+        match self {
+            BlockItem::Declaration(_, line) => *line,
+            BlockItem::Statement(_, line) => *line,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Expression {
     pub expr: ExpressionEnum,
     pub ty: Type,
+    pub line: usize,
 }
 
 impl Expression {
-    pub fn new(expr: ExpressionEnum) -> Self {
+    pub fn new(expr: ExpressionEnum, line: usize) -> Self {
         Expression {
             expr,
             ty: Type::Int,
+            line,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum ExpressionEnum {
-    IntegerLiteral(i16),
-    CharLiteral(char),
-    StringLiteral(String),
-    Unop(Unop, Box<Expression>),
-    Binop(Binop, Box<Expression>, Box<Expression>),
-    Var(String),
-    Assign(Box<Expression>, Box<Expression>), // lvalues :scream:
-    OpAssign(Binop, Box<Expression>, Box<Expression>),
-    Conditional(Box<Expression>, Box<Expression>, Box<Expression>),
-    Increment(Box<Expression>),
-    Decrement(Box<Expression>),
-    FunctionCall(String, Vec<Expression>),
-    Dereference(Box<Expression>),
-    AddressOf(Box<Expression>),
-    Subscript(Box<Expression>, Box<Expression>),
-    Cast(Type, Box<Expression>),
-    SizeOf(Box<Expression>),
-    SizeOfType(Type),
-    Dot(Box<Expression>, String),
-    Arrow(Box<Expression>, String),
+    IntegerLiteral(i16, usize),
+    CharLiteral(char, usize),
+    StringLiteral(String, usize),
+    Unop(Unop, Box<Expression>, usize),
+    Binop(Binop, Box<Expression>, Box<Expression>, usize),
+    Var(String, usize),
+    Assign(Box<Expression>, Box<Expression>, usize), // lvalues :scream:
+    OpAssign(Binop, Box<Expression>, Box<Expression>, usize),
+    Conditional(Box<Expression>, Box<Expression>, Box<Expression>, usize),
+    Increment(Box<Expression>, usize),
+    Decrement(Box<Expression>, usize),
+    FunctionCall(String, Vec<Expression>, usize),
+    Dereference(Box<Expression>, usize),
+    AddressOf(Box<Expression>, usize),
+    Subscript(Box<Expression>, Box<Expression>, usize),
+    Cast(Type, Box<Expression>, usize),
+    SizeOf(Box<Expression>, usize),
+    SizeOfType(Type, usize),
+    Dot(Box<Expression>, String, usize),
+    Arrow(Box<Expression>, String, usize),
+}
+
+impl ExpressionEnum {
+    pub fn line(&self) -> usize {
+        match self {
+            ExpressionEnum::IntegerLiteral(_, line) => *line,
+            ExpressionEnum::CharLiteral(_, line) => *line,
+            ExpressionEnum::StringLiteral(_, line) => *line,
+            ExpressionEnum::Unop(_, _, line) => *line,
+            ExpressionEnum::Binop(_, _, _, line) => *line,
+            ExpressionEnum::Var(_, line) => *line,
+            ExpressionEnum::Assign(_, _, line) => *line,
+            ExpressionEnum::OpAssign(_, _, _, line) => *line,
+            ExpressionEnum::Conditional(_, _, _, line) => *line,
+            ExpressionEnum::Increment(_, line) => *line,
+            ExpressionEnum::Decrement(_, line) => *line,
+            ExpressionEnum::FunctionCall(_, _, line) => *line,
+            ExpressionEnum::Dereference(_, line) => *line,
+            ExpressionEnum::AddressOf(_, line) => *line,
+            ExpressionEnum::Subscript(_, _, line) => *line,
+            ExpressionEnum::Cast(_, _, line) => *line,
+            ExpressionEnum::SizeOf(_, line) => *line,
+            ExpressionEnum::SizeOfType(_, line) => *line,
+            ExpressionEnum::Dot(_, _, line) => *line,
+            ExpressionEnum::Arrow(_, _, line) => *line,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

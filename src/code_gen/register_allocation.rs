@@ -220,7 +220,7 @@ fn rewrite_coalesced(instructions: &Vec<assembly::Instruction>, coalesced_regs: 
 
                 let src = match src {
                     assembly::Operand::Register(r) => r,
-                    _ => panic!("INTERNAL ERROR. PLEASE REPORT: Expected register"),
+                    _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected register"),
                 };
 
                 new_instructions.push(assembly::Instruction::Lod(src, *off, dst));
@@ -231,7 +231,7 @@ fn rewrite_coalesced(instructions: &Vec<assembly::Instruction>, coalesced_regs: 
 
                 let dst = match dst {
                     assembly::Operand::Register(r) => r,
-                    _ => panic!("INTERNAL ERROR. PLEASE REPORT: Expected register"),
+                    _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected register"),
                 };
 
                 new_instructions.push(assembly::Instruction::Str(src, *off, dst));

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::parser::nodes;
+use crate::{errors, parser::nodes};
 
 pub struct VariableResolution {
     program: nodes::Program,
@@ -86,7 +86,7 @@ impl VariableResolution {
         }
     }
 
-    pub fn resolve(&mut self) -> nodes::Program {
+    pub fn resolve(&mut self) -> Result<nodes::Program, errors::Error> {
         let mut statements: Vec<nodes::Declaration> = Vec::new();
 
         let mut global_context = Context {
@@ -96,31 +96,31 @@ impl VariableResolution {
 
         for decl in self.program.statements.clone() {
             match decl {
-                nodes::Declaration::FuncDecl(func) => {
-                    let func = self.resolve_function_declaration(&func, &mut global_context);
+                nodes::Declaration::FuncDecl(func, line) => {
+                    let func = self.resolve_function_declaration(&func, &mut global_context)?;
 
-                    statements.push(nodes::Declaration::FuncDecl(func));
+                    statements.push(nodes::Declaration::FuncDecl(func, line));
                 },
-                nodes::Declaration::VarDecl(var_decl) => {
+                nodes::Declaration::VarDecl(var_decl, _) => {
                     let decl = self.resolve_file_scope_declaration(&var_decl, &mut global_context);
 
                     statements.push(decl);
                 }
-                nodes::Declaration::StructDecl(struct_decl) => {
-                    let decl = self.resolve_struct_declaration(&struct_decl, &mut global_context);
+                nodes::Declaration::StructDecl(struct_decl, line) => {
+                    let decl = self.resolve_struct_declaration(&struct_decl, &mut global_context)?;
 
-                    statements.push(nodes::Declaration::StructDecl(decl));
+                    statements.push(nodes::Declaration::StructDecl(decl, line));
                 }
-                nodes::Declaration::Empty => statements.push(nodes::Declaration::Empty),
+                nodes::Declaration::Empty(line) => statements.push(nodes::Declaration::Empty(line)),
             }
         }
 
-        nodes::Program {
+        Ok(nodes::Program {
             statements,
-        }
+        })
     }
 
-    fn resolve_struct_declaration(&mut self, decl: &nodes::StructDecl, context: &mut Context) -> nodes::StructDecl {
+    fn resolve_struct_declaration(&mut self, decl: &nodes::StructDecl, context: &mut Context) -> Result<nodes::StructDecl, errors::Error> {
         let prev_entry = context.struct_map.get(&decl.tag);
 
         let unique_tag = if prev_entry.is_none() || !prev_entry.unwrap().1 {
@@ -138,22 +138,24 @@ impl VariableResolution {
         for member in &decl.members {
             new_members.push(nodes::MemberDecl {
                 name: member.name.clone(),
-                ty: self.resolve_type(&member.ty, context),
+                ty: self.resolve_type(&member.ty, context)?,
+                line: member.line,
             });
         }
 
-        nodes::StructDecl {
+        Ok(nodes::StructDecl {
             tag: unique_tag,
             members: new_members,
-        }
+            line: decl.line,
+        })
     }
 
-    fn resolve_function_declaration(&mut self, decl: &nodes::FuncDecl, context: &mut Context) -> nodes::FuncDecl {
+    fn resolve_function_declaration(&mut self, decl: &nodes::FuncDecl, context: &mut Context) -> Result<nodes::FuncDecl, errors::Error> {
         let decl_name = &decl.name;
         if context.variable_map.contains_key(&decl_name) {
             let old_decl = context.variable_map.get(&decl_name).unwrap();
             if old_decl.from_current_scope && !old_decl.has_external_linkage {
-                panic!("Function {:?} already declared", decl_name);
+                return Err(errors::Error::new(errors::ErrorType::Error, format!("Function {:?} already declared", decl_name), decl.line));
             }
         }
 
@@ -169,7 +171,7 @@ impl VariableResolution {
 
         for param in &decl.params {
             if context.variable_map.contains_key(param) {
-                panic!("Variable {:?} already declared", param);
+                return Err(errors::Error::new(errors::ErrorType::Error, format!("Variable {:?} already declared", param), decl.line));
             }
             
             let unique_name = self.generate_unique_name("arg", param);
@@ -185,19 +187,20 @@ impl VariableResolution {
         let mut new_body: Vec<nodes::BlockItem> = Vec::new();
         if decl.body.len() > 0 {
             for stmt in decl.body.clone() {
-                new_body.push(self.resolve_block_item(&stmt, &mut inner_map));
+                new_body.push(self.resolve_block_item(&stmt, &mut inner_map)?);
             }
         }
 
-        let ty = self.resolve_type(&decl.ty, context);
+        let ty = self.resolve_type(&decl.ty, context)?;
 
-        nodes::FuncDecl {
+        Ok(nodes::FuncDecl {
             name: decl.name.clone(),
             params: new_params,
             body: new_body,
             storage_class: decl.storage_class.clone(),
             ty,
-        }
+            line: decl.line,
+        })
     }
 
     fn generate_unique_name(&mut self, function: &str, original_name: &String) -> String {
@@ -214,19 +217,19 @@ impl VariableResolution {
             has_external_linkage: true,
         });
 
-        nodes::Declaration::VarDecl(decl.clone())
+        nodes::Declaration::VarDecl(decl.clone(), decl.line)
     }
 
-    fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, context: &mut Context) -> nodes::BlockItem {
-        match stmt {
-            nodes::BlockItem::Statement(ref inner_stmt) => nodes::BlockItem::Statement(self.resolve_statement(inner_stmt, context)),
-            nodes::BlockItem::Declaration(ref decl) => {
+    fn resolve_block_item(&mut self, stmt: &nodes::BlockItem, context: &mut Context) -> Result<nodes::BlockItem, errors::Error> {
+        Ok(match stmt {
+            nodes::BlockItem::Statement(ref inner_stmt, line) => nodes::BlockItem::Statement(self.resolve_statement(inner_stmt, context)?, *line),
+            nodes::BlockItem::Declaration(ref decl, _) => {
                 match decl {
-                    nodes::Declaration::VarDecl(decl) => {
+                    nodes::Declaration::VarDecl(decl, line) => {
                         if context.variable_map.contains_key(&decl.name) {
                             let old_decl = context.variable_map.get(&decl.name).unwrap();
                             if old_decl.from_current_scope && !(old_decl.has_external_linkage && decl.storage_class == nodes::StorageClass::Extern) {
-                                panic!("Conflicting local declarations of variable {:?}", decl.name);
+                                return Err(errors::Error::new(errors::ErrorType::Error, format!("Conflicting local declarations of variable {:?}", decl.name), *line));
                             }
                         }
 
@@ -237,7 +240,7 @@ impl VariableResolution {
                                 from_current_scope: true,
                                 has_external_linkage: true,
                             });
-                            return nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(decl.clone()));
+                            return Ok(nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(decl.clone(), *line), *line));
                         }
         
                         let orig_name = decl.name.clone();
@@ -253,110 +256,116 @@ impl VariableResolution {
         
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            let val = self.resolve_init(expr, context);
-                            let ty = self.resolve_type(&decl.ty, context);
+                            let val = self.resolve_init(expr, context)?;
+                            let ty = self.resolve_type(&decl.ty, context)?;
                             nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
                                 name: unique_name,
                                 expr: Some(val),
                                 storage_class: decl.storage_class,
                                 ty,
-                            }))
+                                line: *line
+                            }, *line), *line)
                         } else {
-                            let ty = self.resolve_type(&decl.ty, context);
+                            let ty = self.resolve_type(&decl.ty, context)?;
                             nodes::BlockItem::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
                                 name: unique_name,
                                 expr: None,
                                 storage_class: decl.storage_class,
-                                ty
-                            }))
+                                ty,
+                                line: *line,
+                            }, *line), *line)
                         }
                     }
-                    nodes::Declaration::StructDecl(decl) => {
-                        nodes::BlockItem::Declaration(nodes::Declaration::StructDecl(self.resolve_struct_declaration(decl, context)))
+                    nodes::Declaration::StructDecl(decl, line) => {
+                        nodes::BlockItem::Declaration(nodes::Declaration::StructDecl(self.resolve_struct_declaration(decl, context)?, *line), *line)
                     }
-                    nodes::Declaration::FuncDecl(_) => {
-                        panic!("Function declarations not allowed in block items");
+                    nodes::Declaration::FuncDecl(_, _) => {
+                        unimplemented!("Function declarations not allowed in block items");
                     }
-                    nodes::Declaration::Empty => nodes::BlockItem::Declaration(nodes::Declaration::Empty),
+                    nodes::Declaration::Empty(line) => nodes::BlockItem::Declaration(nodes::Declaration::Empty(*line), *line),
                 }
                 
             },
-        }
+        })
     }
 
-    fn resolve_init(&mut self, init: &nodes::Initializer, context: &mut Context) -> nodes::Initializer {
-        match init {
-            nodes::Initializer::Single(ref expr) => {
-                let val = self.resolve_expression(expr, context);
-                nodes::Initializer::Single(val)
+    fn resolve_init(&mut self, init: &nodes::Initializer, context: &mut Context) -> Result<nodes::Initializer, errors::Error> {
+        Ok(match init {
+            nodes::Initializer::Single(ref expr, line) => {
+                let val = self.resolve_expression(expr, context)?;
+                nodes::Initializer::Single(val, *line)
             },
-            nodes::Initializer::Compound(ref inits) => {
+            nodes::Initializer::Compound(ref inits, line) => {
                 let mut new_inits: Vec<nodes::Initializer> = Vec::new();
                 for init in inits {
-                    new_inits.push(self.resolve_init(init, context));
+                    new_inits.push(self.resolve_init(init, context)?);
                 }
-                nodes::Initializer::Compound(new_inits)
+                nodes::Initializer::Compound(new_inits, *line)
             },
-        }
+        })
     }
 
-    fn resolve_statement(&mut self, stmt: &nodes::Statement, context: &mut Context) -> nodes::Statement {
-        match stmt {
-            nodes::Statement::Return(ref expr) => {
+    fn resolve_statement(&mut self, stmt: &nodes::Statement, context: &mut Context) -> Result<nodes::Statement, errors::Error> {
+        Ok(match stmt {
+            nodes::Statement::Return(ref expr, line) => {
                 match expr {
                     Some(expr) => {
-                        let val = self.resolve_expression(expr, context);
-                        nodes::Statement::Return(Some(val))
+                        let val = self.resolve_expression(expr, context)?;
+                        nodes::Statement::Return(Some(val), *line)
                     }
-                    None => nodes::Statement::Return(None)
+                    None => nodes::Statement::Return(None, *line)
                 }
             },
-            nodes::Statement::Expression(ref expr) => {
-                let val = self.resolve_expression(expr, context);
-                nodes::Statement::Expression(val)
+            nodes::Statement::Expression(ref expr, line) => {
+                let val = self.resolve_expression(expr, context)?;
+                nodes::Statement::Expression(val, *line)
             },
-            nodes::Statement::If(ref cond, ref then, ref else_) => {
-                let cond = self.resolve_expression(cond, context);
-                let lft = Box::new(self.resolve_statement(&**then, context));
+            nodes::Statement::If(ref cond, ref then, ref else_, line) => {
+                let cond = self.resolve_expression(cond, context)?;
+                let lft = Box::new(self.resolve_statement(&**then, context)?);
                 let rht = Box::new(match *else_.clone() {
-                    Some(stmt) => Some(self.resolve_statement(&stmt, context)),
+                    Some(stmt) => Some(self.resolve_statement(&stmt, context)?),
                     None => None
                 });
 
-                nodes::Statement::If(cond, lft, rht)
+                nodes::Statement::If(cond, lft, rht, *line)
             },
-            nodes::Statement::Compound(ref stmts) => {
+            nodes::Statement::Compound(ref stmts, line) => {
                 let mut new_var_map = context.clone();
-                nodes::Statement::Compound(stmts.iter().map(|stmt| self.resolve_block_item(stmt, &mut new_var_map)).collect())
+                let mut new_stmts: Vec<nodes::BlockItem> = Vec::new();
+                for stmt in stmts {
+                    new_stmts.push(self.resolve_block_item(stmt, &mut new_var_map)?);
+                }
+                nodes::Statement::Compound(new_stmts, *line)
             }
-            nodes::Statement::Break(_) => stmt.clone(),
-            nodes::Statement::Continue(_) => stmt.clone(),
-            nodes::Statement::While(ref cond, ref body, _) => {
-                let cond = self.resolve_expression(cond, context);
-                let body = Box::new(self.resolve_statement(&**body, context));
+            nodes::Statement::Break(_, _) |
+            nodes::Statement::Continue(_, _) => stmt.clone(),
+            nodes::Statement::While(ref cond, ref body, _, line) => {
+                let cond = self.resolve_expression(cond, context)?;
+                let body = Box::new(self.resolve_statement(&**body, context)?);
 
-                nodes::Statement::While(cond, body, String::new())
+                nodes::Statement::While(cond, body, String::new(), *line)
             },
-            nodes::Statement::DoWhile(ref body, ref cond, _) => {
-                let body = Box::new(self.resolve_statement(&**body, context));
-                let cond = self.resolve_expression(cond, context);
+            nodes::Statement::DoWhile(ref body, ref cond, _, line) => {
+                let body = Box::new(self.resolve_statement(&**body, context)?);
+                let cond = self.resolve_expression(cond, context)?;
 
-                nodes::Statement::DoWhile(body, cond, String::new())
+                nodes::Statement::DoWhile(body, cond, String::new(), *line)
             },
-            nodes::Statement::For(ref init, ref cond, ref post, ref body, _) => {
+            nodes::Statement::For(ref init, ref cond, ref post, ref body, _, line) => {
                 let init = match init {
-                    nodes::ForInit::Declaration(ref decl) => {
-                        let decl = match decl { nodes::Declaration::VarDecl(ref decl) => decl, _ => panic!("Invalid declaration") };
+                    nodes::ForInit::Declaration(ref decl, line) => {
+                        let decl = match decl { nodes::Declaration::VarDecl(ref decl, _) => decl, _ => return Err(errors::Error::new(errors::ErrorType::Error, String::from("Expected variable declaration in for"), *line)) };
 
                         if context.variable_map.contains_key(&decl.name) {
                             let old_decl = context.variable_map.get(&decl.name).unwrap();
                             if old_decl.from_current_scope && !(old_decl.has_external_linkage && decl.storage_class == nodes::StorageClass::Extern) {
-                                panic!("Conflicting local declarations of variable {:?}", decl.name);
+                                return Err(errors::Error::new(errors::ErrorType::Error, format!("Conflicting local declarations of variable {:?}", decl.name), *line));
                             }
                         }
 
                         if decl.storage_class == nodes::StorageClass::Extern {
-                            panic!("Cannot declare extern variables in for loop");
+                            return Err(errors::Error::new(errors::ErrorType::Error, String::from("Extern storage class not allowed in for"), *line));
                         }
         
                         let orig_name = decl.name.clone();
@@ -372,199 +381,210 @@ impl VariableResolution {
         
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            let val = self.resolve_init(expr, context);
-                            let ty = self.resolve_type(&decl.ty, context);
+                            let val = self.resolve_init(expr, context)?;
+                            let ty = self.resolve_type(&decl.ty, context)?;
                             nodes::ForInit::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
                                 name: unique_name,
                                 expr: Some(val),
                                 storage_class: decl.storage_class,
                                 ty,
-                            }))
+                                line: *line
+                            }, *line), *line)
                         } else {
-                            nodes::ForInit::Empty
+                            nodes::ForInit::Empty(*line)
                         }
                     },
-                    nodes::ForInit::Expression(ref expr) => {
-                        let expr = self.resolve_expression(expr, context);
-                        nodes::ForInit::Expression(expr)
+                    nodes::ForInit::Expression(ref expr, line) => {
+                        let expr = self.resolve_expression(expr, context)?;
+                        nodes::ForInit::Expression(expr, *line)
                     },
-                    nodes::ForInit::Empty => nodes::ForInit::Empty,
+                    nodes::ForInit::Empty(line) => nodes::ForInit::Empty(*line),
                 };
 
                 let cond = match cond {
-                    Some(ref expr) => Some(self.resolve_expression(expr, context)),
+                    Some(ref expr) => Some(self.resolve_expression(expr, context)?),
                     None => None,
                 };
 
                 let post = match post {
-                    Some(ref expr) => Some(self.resolve_expression(expr, context)),
+                    Some(ref expr) => Some(self.resolve_expression(expr, context)?),
                     None => None,
                 };
 
-                let body = Box::new(self.resolve_statement(&**body, context));
+                let body = Box::new(self.resolve_statement(&**body, context)?);
 
-                nodes::Statement::For(init, cond, post, body, String::new())
+                nodes::Statement::For(init, cond, post, body, String::new(), *line)
             },
-            nodes::Statement::Empty => stmt.clone(),
-        }
+            nodes::Statement::Empty(_) => stmt.clone(),
+        })
     }
 
     fn is_valid_lvalue(&self, expr: &nodes::Expression) -> bool {
         match expr.expr {
-            nodes::ExpressionEnum::Var(_) => true,
-            nodes::ExpressionEnum::Dereference(_) => true,
-            nodes::ExpressionEnum::Subscript(_, _) => true,
-            nodes::ExpressionEnum::Dot(_, _) |
-            nodes::ExpressionEnum::Arrow(_, _) => true,
+            nodes::ExpressionEnum::Var(_, _) => true,
+            nodes::ExpressionEnum::Dereference(_, _) => true,
+            nodes::ExpressionEnum::Subscript(_, _, _) => true,
+            nodes::ExpressionEnum::Dot(_, _, _) |
+            nodes::ExpressionEnum::Arrow(_, _, _) => true,
             _ => false,
         }
     }
 
-    fn resolve_expression(&mut self, expr: &nodes::Expression, context: &Context) -> nodes::Expression {
-        nodes::Expression::new(match expr.expr.clone() {
-            nodes::ExpressionEnum::Binop(ref op, ref src1, ref src2) => {
-                let src1 = self.resolve_expression(src1, context);
-                let src2 = self.resolve_expression(src2, context);
+    fn resolve_expression(&mut self, expr: &nodes::Expression, context: &Context) -> Result<nodes::Expression, errors::Error> {
+        Ok(nodes::Expression::new(match expr.expr.clone() {
+            nodes::ExpressionEnum::Binop(ref op, ref src1, ref src2, line) => {
+                let src1 = self.resolve_expression(src1, context)?;
+                let src2 = self.resolve_expression(src2, context)?;
 
-                nodes::ExpressionEnum::Binop(op.clone(), Box::new(src1), Box::new(src2))
+                nodes::ExpressionEnum::Binop(op.clone(), Box::new(src1), Box::new(src2), line)
             },
-            nodes::ExpressionEnum::Unop(ref op, ref src) => {
-                let src = self.resolve_expression(src, context);
+            nodes::ExpressionEnum::Unop(ref op, ref src, line) => {
+                let src = self.resolve_expression(src, context)?;
 
-                nodes::ExpressionEnum::Unop(op.clone(), Box::new(src))
+                nodes::ExpressionEnum::Unop(op.clone(), Box::new(src), line)
             },
-            nodes::ExpressionEnum::IntegerLiteral(_) | nodes::ExpressionEnum::CharLiteral(_) |
-            nodes::ExpressionEnum::StringLiteral(_) => expr.expr.clone(),
-            nodes::ExpressionEnum::Var(ref ident) => {
+            nodes::ExpressionEnum::IntegerLiteral(_, _) | nodes::ExpressionEnum::CharLiteral(_, _) |
+            nodes::ExpressionEnum::StringLiteral(_, _) => expr.expr.clone(),
+            nodes::ExpressionEnum::Var(ref ident, line) => {
                 if context.variable_map.contains_key(ident) {
-                    nodes::ExpressionEnum::Var(context.variable_map.get(ident).unwrap().name.clone())
+                    nodes::ExpressionEnum::Var(context.variable_map.get(ident).unwrap().name.clone(), line)
                 } else {
-                    panic!("Variable {:?} not found", ident);
+                    return Err(errors::Error::new(
+                        errors::ErrorType::Error,
+                        format!("Variable {:?} not found", ident),
+                        line
+                    ));
                 }
             },
-            nodes::ExpressionEnum::Assign(ref lhs, ref rhs) => {
+            nodes::ExpressionEnum::Assign(ref lhs, ref rhs, line) => {
                 if !self.is_valid_lvalue(&**lhs) {
-                    panic!("Invalid lvalue");
+                    return Err(errors::Error::new(errors::ErrorType::Error, String::from("Invalid lvalue"), line));
                 }
 
-                let lhs = self.resolve_expression(lhs, context);
-                let rhs = self.resolve_expression(rhs, context);
+                let lhs = self.resolve_expression(lhs, context)?;
+                let rhs = self.resolve_expression(rhs, context)?;
 
-                nodes::ExpressionEnum::Assign(Box::new(lhs), Box::new(rhs))
+                nodes::ExpressionEnum::Assign(Box::new(lhs), Box::new(rhs), line)
             },
-            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs) => {
+            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs, line) => {
                 if !self.is_valid_lvalue(&**lhs) {
-                    panic!("Invalid lvalue");
+                    return Err(errors::Error::new(errors::ErrorType::Error, String::from("Invalid lvalue"), line));
                 }
 
-                let lhs = self.resolve_expression(lhs, context);
-                let rhs = self.resolve_expression(rhs, context);
+                let lhs = self.resolve_expression(lhs, context)?;
+                let rhs = self.resolve_expression(rhs, context)?;
 
-                nodes::ExpressionEnum::OpAssign(op, Box::new(lhs), Box::new(rhs))
+                nodes::ExpressionEnum::OpAssign(op, Box::new(lhs), Box::new(rhs), line)
             },
-            nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
-                let cond = Box::new(self.resolve_expression(&**cond, context));
-                let lft = Box::new(self.resolve_expression(&**lft, context));
-                let rht = Box::new(self.resolve_expression(&**rht, context));
+            nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht, line) => {
+                let cond = Box::new(self.resolve_expression(&**cond, context)?);
+                let lft = Box::new(self.resolve_expression(&**lft, context)?);
+                let rht = Box::new(self.resolve_expression(&**rht, context)?);
 
-                nodes::ExpressionEnum::Conditional(cond, lft, rht)
+                nodes::ExpressionEnum::Conditional(cond, lft, rht, line)
             },
-            nodes::ExpressionEnum::Increment(ref expr) => {
+            nodes::ExpressionEnum::Increment(ref expr, line) => {
                 if !self.is_valid_lvalue(&**expr) {
-                    panic!("Invalid lvalue");
+                    return Err(errors::Error::new(errors::ErrorType::Error, String::from("Invalid lvalue"), line));
                 }
 
-                let expr = self.resolve_expression(expr, context);
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::Increment(Box::new(expr))
+                nodes::ExpressionEnum::Increment(Box::new(expr), line)
             },
-            nodes::ExpressionEnum::Decrement(ref expr) => {
+            nodes::ExpressionEnum::Decrement(ref expr, line) => {
                 if !self.is_valid_lvalue(&**expr) {
-                    panic!("Invalid lvalue");
+                    return Err(errors::Error::new(errors::ErrorType::Error, String::from("Invalid lvalue"), line));
                 }
 
-                let expr = self.resolve_expression(expr, context);
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::Decrement(Box::new(expr))
+                nodes::ExpressionEnum::Decrement(Box::new(expr), line)
             },
-            nodes::ExpressionEnum::FunctionCall(name, args) => {
+            nodes::ExpressionEnum::FunctionCall(name, args, line) => {
                 let ident = &name;
                 if context.variable_map.contains_key(&ident) {
                     let name = context.variable_map.get(&ident).unwrap();
-                    let args = args.iter().map(|arg| self.resolve_expression(arg, context)).collect();
-                    nodes::ExpressionEnum::FunctionCall(name.name.clone(), args)
+                    let mut new_args: Vec<nodes::Expression> = Vec::with_capacity(args.len());
+                    for arg in args {
+                        new_args.push(self.resolve_expression(&arg, context)?);
+                    }
+                    nodes::ExpressionEnum::FunctionCall(name.name.clone(), new_args, line)
                 } else {
-                    panic!("Function {:?} not found", name);
+                    return Err(errors::Error::new(errors::ErrorType::Error, format!("Function {:?} not found", ident), line));
                 }
             },
-            nodes::ExpressionEnum::Dereference(ref expr) => {
-                let expr = self.resolve_expression(expr, context);
+            nodes::ExpressionEnum::Dereference(ref expr, line) => {
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::Dereference(Box::new(expr))
+                nodes::ExpressionEnum::Dereference(Box::new(expr), line)
             },
-            nodes::ExpressionEnum::AddressOf(ref expr) => {
-                let expr = self.resolve_expression(expr, context);
+            nodes::ExpressionEnum::AddressOf(ref expr, line) => {
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::AddressOf(Box::new(expr))
+                nodes::ExpressionEnum::AddressOf(Box::new(expr), line)
             },
-            nodes::ExpressionEnum::Subscript(ref expr, ref index) => {
-                let expr = self.resolve_expression(expr, context);
-                let index = self.resolve_expression(index, context);
+            nodes::ExpressionEnum::Subscript(ref expr, ref index, line) => {
+                let expr = self.resolve_expression(expr, context)?;
+                let index = self.resolve_expression(index, context)?;
 
-                nodes::ExpressionEnum::Subscript(Box::new(expr), Box::new(index))
+                nodes::ExpressionEnum::Subscript(Box::new(expr), Box::new(index), line)
             },
-            nodes::ExpressionEnum::Cast(ty, ref expr) => {
-                let expr = self.resolve_expression(expr, context);
-                let ty = self.resolve_type(&ty, context);
+            nodes::ExpressionEnum::Cast(ty, ref expr, line) => {
+                let expr = self.resolve_expression(expr, context)?;
+                let ty = self.resolve_type(&ty, context)?;
 
-                nodes::ExpressionEnum::Cast(ty, Box::new(expr))
+                nodes::ExpressionEnum::Cast(ty, Box::new(expr), line)
             },
-            nodes::ExpressionEnum::SizeOf(ref expr) => {
-                let expr = self.resolve_expression(expr, context);
+            nodes::ExpressionEnum::SizeOf(ref expr, line) => {
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::SizeOf(Box::new(expr))
+                nodes::ExpressionEnum::SizeOf(Box::new(expr), line)
             },
-            nodes::ExpressionEnum::SizeOfType(ty) => {
-                let ty = self.resolve_type(&ty, context);
+            nodes::ExpressionEnum::SizeOfType(ty, line) => {
+                let ty = self.resolve_type(&ty, context)?;
                 
-                nodes::ExpressionEnum::SizeOfType(ty)
+                nodes::ExpressionEnum::SizeOfType(ty, line)
             },
-            nodes::ExpressionEnum::Arrow(ref expr, ref member) => {
-                let expr = self.resolve_expression(expr, context);
+            nodes::ExpressionEnum::Arrow(ref expr, ref member, line) => {
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::Arrow(Box::new(expr), member.clone())
+                nodes::ExpressionEnum::Arrow(Box::new(expr), member.clone(), line)
             },
-            nodes::ExpressionEnum::Dot(ref expr, ref member) => {
-                let expr = self.resolve_expression(expr, context);
+            nodes::ExpressionEnum::Dot(ref expr, ref member, line) => {
+                let expr = self.resolve_expression(expr, context)?;
 
-                nodes::ExpressionEnum::Dot(Box::new(expr), member.clone())
+                nodes::ExpressionEnum::Dot(Box::new(expr), member.clone(), line)
             },
-        })
+        }, expr.line))
     }
 
-    fn resolve_type(&self, type_spec: &nodes::Type, context: &Context) -> nodes::Type {
-        match type_spec {
+    fn resolve_type(&self, type_spec: &nodes::Type, context: &Context) -> Result<nodes::Type, errors::Error> {
+        Ok(match type_spec {
             nodes::Type::Struct(ref name) => {
                 if context.struct_map.contains_key(name) {
                     nodes::Type::Struct(context.struct_map.get(name).unwrap().0.clone())
                 } else {
-                    panic!("Struct {:?} not found", name);
+                    return Err(errors::Error::new(errors::ErrorType::Error, format!("Struct {:?} not found", name), 0));
                 }
             },
             nodes::Type::Pointer(ref ty) => {
-                let ty = self.resolve_type(ty, context);
+                let ty = self.resolve_type(ty, context)?;
                 nodes::Type::Pointer(Box::new(ty))
             },
             nodes::Type::Array(ref ty, size) => {
-                let ty = self.resolve_type(ty, context);
+                let ty = self.resolve_type(ty, context)?;
                 nodes::Type::Array(Box::new(ty), *size)
             },
             nodes::Type::Fn(ref params, ref ty) => {
-                let ty = self.resolve_type(ty, context);
-                let params = params.iter().map(|param| self.resolve_type(param, context)).collect();
-                nodes::Type::Fn(params, Box::new(ty))
+                let ty = self.resolve_type(ty, context)?;
+                let mut new_params: Vec<nodes::Type> = Vec::with_capacity(params.len());
+                for param in params {
+                    new_params.push(self.resolve_type(param, context)?);
+                }
+                nodes::Type::Fn(new_params, Box::new(ty))
             },
             nodes::Type::Int | nodes::Type::Char | nodes::Type::Void => type_spec.clone(),
-        }
+        })
     }
 }

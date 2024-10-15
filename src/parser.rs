@@ -311,6 +311,7 @@ impl Parser {
         
 
     fn parse_initializer(&mut self) -> Result<nodes::Initializer, errors::Error> {
+        let line = self.current_token.line;
         Ok(match self.current_token.token_type {
             TokenType::LBrace => {
                 self.next_token()?;
@@ -324,18 +325,20 @@ impl Parser {
                     }
                 }
                 self.next_token()?;
-                nodes::Initializer::Compound(inits)
+                nodes::Initializer::Compound(inits, line)
             },
-            _ => nodes::Initializer::Single(self.parse_expression(0)?),
+            _ => nodes::Initializer::Single(self.parse_expression(0)?, line),
         })
     }
 
     fn parse_declaration(&mut self) -> Result<nodes::Declaration, errors::Error> {
+        let line = self.current_token.line;
+
         if let TokenType::Keyword(ref kwd) = self.current_token.token_type {
             if kwd == "typedef" {
                 return Ok(match self.parse_typedef()? {
                     Some(decl) => decl,
-                    None => nodes::Declaration::Empty,
+                    None => nodes::Declaration::Empty(self.current_token.line),
                 });
             }
         }
@@ -377,7 +380,8 @@ impl Parser {
                         body: Vec::new(),
                         storage_class: class_specifier,
                         ty: type_,
-                    }));
+                        line,
+                    }, line));
                 }
         
                 self.consume(TokenType::LBrace)?;
@@ -396,7 +400,8 @@ impl Parser {
                     body,
                     storage_class: class_specifier,
                     ty: type_,
-                }));
+                    line,
+                }, line));
             }
             _ => (),
         }
@@ -408,7 +413,8 @@ impl Parser {
                 expr: None,
                 storage_class: class_specifier,
                 ty: type_,
-            }))
+                line,
+            }, line))
         } else if self.current_token.token_type == TokenType::Equals {
             self.next_token()?;
             
@@ -420,19 +426,23 @@ impl Parser {
                 expr: Some(expr),
                 storage_class: class_specifier,
                 ty: type_,
-            }))
+                line,
+            }, line))
         } else {
             Err(errors::Error::new(errors::ErrorType::Error, format!("Expected ';', got {:?}", self.current_token), self.current_token.line))
         }
     }
 
     fn parse_struct_declaration(&mut self, tag: String) -> Result<nodes::Declaration, errors::Error> {
+        let line = self.current_token.line;
         let decl = if self.current_token.token_type == TokenType::LBrace {
             self.next_token()?;
             let mut members: Vec<nodes::MemberDecl> = Vec::new();
 
             while self.current_token.token_type != TokenType::RBrace {
                 let types = self.parse_types()?;
+
+                let line = self.current_token.line;
 
                 let (type_, _) = self.parse_type_and_storage_class(types)?;
 
@@ -443,13 +453,14 @@ impl Parser {
                 members.push(nodes::MemberDecl {
                     name,
                     ty,
+                    line,
                 });
 
                 if self.current_token.token_type == TokenType::Semicolon {
                     self.next_token()?;
                     continue;
                 } else if self.current_token.token_type != TokenType::RBrace {
-                    return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected ';' or '}}', got {:?}", self.current_token), self.current_token.line));
+                    return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected ';' or '}}', got {:?}", self.current_token.token_type), self.current_token.line));
                 }
             }
 
@@ -460,24 +471,28 @@ impl Parser {
             nodes::Declaration::StructDecl(nodes::StructDecl {
                 tag,
                 members,
-            })
+                line,
+            }, line)
         } else {
             nodes::Declaration::StructDecl(nodes::StructDecl {
                 tag,
                 members: Vec::new(),
-            })
+                line
+            }, line)
         };
 
         Ok(decl)
     }
 
     fn parse_block_item(&mut self) -> Result<nodes::BlockItem, errors::Error> {
+        let line = self.current_token.line;
         if self.is_valid_var_starter(&self.current_token.token_type) {
-            Ok(nodes::BlockItem::Declaration(self.parse_declaration()?))
-        } else { Ok(nodes::BlockItem::Statement(self.parse_statement()?)) }
+            Ok(nodes::BlockItem::Declaration(self.parse_declaration()?, line))
+        } else { Ok(nodes::BlockItem::Statement(self.parse_statement()?, line)) }
     }
 
     fn parse_statement(&mut self) -> Result<nodes::Statement, errors::Error> {
+        let line = self.current_token.line;
         Ok(match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => {
                 match keyword.as_str() {
@@ -489,15 +504,15 @@ impl Parser {
                     "break" => {
                         self.next_token()?;
                         self.consume(TokenType::Semicolon)?;
-                        nodes::Statement::Break("".to_string())
+                        nodes::Statement::Break("".to_string(), line)
                     },
                     "continue" => {
                         self.next_token()?;
                         self.consume(TokenType::Semicolon)?;
-                        nodes::Statement::Continue("".to_string())
+                        nodes::Statement::Continue("".to_string(), line)
                     },
                     "sizeof" => {
-                        nodes::Statement::Expression(self.parse_expression(0)?)
+                        nodes::Statement::Expression(self.parse_expression(0)?, line)
                     },
                     _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid keyword {:?}", keyword), self.current_token.line)),
                 }
@@ -515,14 +530,14 @@ impl Parser {
 
                 self.next_token()?;
 
-                nodes::Statement::Compound(stmts)
+                nodes::Statement::Compound(stmts, line)
             }
             TokenType::Semicolon => {
                 self.next_token()?;
-                nodes::Statement::Empty
+                nodes::Statement::Empty(line)
             },
             _ => {
-                let expr = nodes::Statement::Expression(self.parse_expression(0)?);
+                let expr = nodes::Statement::Expression(self.parse_expression(0)?, line);
                 self.consume(TokenType::Semicolon)?;
                 expr
             },
@@ -593,7 +608,8 @@ impl Parser {
     }
 
     fn parse_if_statement(&mut self) -> Result<nodes::Statement, errors::Error> {
-        self.consume(TokenType::Keyword("if".to_string()))?;
+        let line = self.current_token.line;
+        self.next_token()?;
 
         self.consume(TokenType::LParen)?;
 
@@ -611,10 +627,11 @@ impl Parser {
             None
         };
 
-        Ok(nodes::Statement::If(cond, Box::new(then), Box::new(else_)))
+        Ok(nodes::Statement::If(cond, Box::new(then), Box::new(else_), line))
     }
 
     fn parse_while_statement(&mut self) -> Result<nodes::Statement, errors::Error> {
+        let line = self.current_token.line;
         self.next_token()?;
 
         self.consume(TokenType::LParen)?;
@@ -625,10 +642,11 @@ impl Parser {
 
         let stmt = self.parse_statement()?;
 
-        Ok(nodes::Statement::While(cond, Box::new(stmt), "".to_string()))
+        Ok(nodes::Statement::While(cond, Box::new(stmt), "".to_string(), line))
     }
 
     fn parse_do_while(&mut self) -> Result<nodes::Statement, errors::Error> {
+        let line = self.current_token.line;
         self.next_token()?;
 
         let stmt = self.parse_statement()?;
@@ -641,24 +659,26 @@ impl Parser {
         self.consume(TokenType::RParen)?;
         self.consume(TokenType::Semicolon)?;
 
-        Ok(nodes::Statement::DoWhile(Box::new(stmt), cond, "".to_string()))
+        Ok(nodes::Statement::DoWhile(Box::new(stmt), cond, "".to_string(), line))
     }
 
     fn parse_for_loop(&mut self) -> Result<nodes::Statement, errors::Error> {
+        let line = self.current_token.line;
         self.next_token()?;
 
         self.consume(TokenType::LParen)?;
 
+        let init_line = self.current_token.line;
         // parse forinit
         let for_init = if self.current_token.token_type == TokenType::Semicolon {
-            nodes::ForInit::Empty
+            nodes::ForInit::Empty(init_line)
         } else if self.is_valid_var_starter(&self.current_token.token_type) {
             let decl = self.parse_declaration()?; // consumes semicolon
-            nodes::ForInit::Declaration(decl)
+            nodes::ForInit::Declaration(decl, init_line)
         } else {
             let expr = self.parse_expression(0)?;
             self.consume(TokenType::Semicolon)?;
-            nodes::ForInit::Expression(expr)
+            nodes::ForInit::Expression(expr, init_line)
         };
 
         let condition = if self.current_token.token_type == TokenType::Semicolon {
@@ -680,15 +700,17 @@ impl Parser {
 
         let stmt = self.parse_statement()?;
 
-        Ok(nodes::Statement::For(for_init, condition, increment, Box::new(stmt), "".to_string()))
+        Ok(nodes::Statement::For(for_init, condition, increment, Box::new(stmt), "".to_string(), line))
     }
 
     fn parse_return_statement(&mut self) -> Result<nodes::Statement, errors::Error> {
+        let line = self.current_token.line;
+
         self.next_token()?;
 
         if self.current_token.token_type == TokenType::Semicolon {
             self.next_token()?;
-            return Ok(nodes::Statement::Return(None));
+            return Ok(nodes::Statement::Return(None, line));
         }
 
         let expr = self.parse_expression(0)?;
@@ -699,38 +721,39 @@ impl Parser {
 
         self.next_token()?;
 
-        Ok(nodes::Statement::Return(Some(expr)))
+        Ok(nodes::Statement::Return(Some(expr), line))
     }
 
     fn parse_unop(&mut self) -> Result<nodes::Expression, errors::Error> {
+        let line = self.current_token.line;
         Ok(nodes::Expression::new(match self.current_token.token_type {
             TokenType::Tilde => {
                 self.next_token()?;
                 let expr = self.parse_factor()?;
-                nodes::ExpressionEnum::Unop(nodes::Unop::BitwiseNot, Box::new(expr))
+                nodes::ExpressionEnum::Unop(nodes::Unop::BitwiseNot, Box::new(expr), line)
             }
             TokenType::Minus => {
                 self.next_token()?;
                 let expr = self.parse_factor()?;
-                nodes::ExpressionEnum::Unop(nodes::Unop::Negate, Box::new(expr))
+                nodes::ExpressionEnum::Unop(nodes::Unop::Negate, Box::new(expr), line)
             }
             TokenType::LogicalNot => {
                 self.next_token()?;
                 let expr = self.parse_factor()?;
-                nodes::ExpressionEnum::Unop(nodes::Unop::LogicalNot, Box::new(expr))
+                nodes::ExpressionEnum::Unop(nodes::Unop::LogicalNot, Box::new(expr), line)
             }
             TokenType::Star => {
                 self.next_token()?;
                 let expr = self.parse_factor()?;
-                nodes::ExpressionEnum::Dereference(Box::new(expr))
+                nodes::ExpressionEnum::Dereference(Box::new(expr), line)
             }
             TokenType::Ampersand => {
                 self.next_token()?;
                 let expr = self.parse_factor()?;
-                nodes::ExpressionEnum::AddressOf(Box::new(expr))
+                nodes::ExpressionEnum::AddressOf(Box::new(expr), line)
             }
             _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected unary operator, got {:?}", self.current_token),
-        }))
+        }, line))
     }
 
     fn get_precedence(&self, token: &TokenType) -> i32 {
@@ -794,30 +817,31 @@ impl Parser {
         let mut prec: i32;
         let mut is_op_assign: (bool, nodes::Binop);
         while (prec = self.get_precedence(&self.current_token.token_type), prec).1 >= min_prec {
+            let line = self.current_token.line;
             if self.current_token.token_type == TokenType::Equals {
                 self.next_token()?;
-                expr = nodes::Expression::new(nodes::ExpressionEnum::Assign(Box::new(expr), Box::new(self.parse_expression(prec)?)));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::Assign(Box::new(expr), Box::new(self.parse_expression(prec)?), line), line);
             } else if (is_op_assign = self.is_op_assign(&self.current_token.token_type), is_op_assign.0).1 {
                 self.next_token()?;
-                expr = nodes::Expression::new(nodes::ExpressionEnum::OpAssign(is_op_assign.1, Box::new(expr), Box::new(self.parse_expression(prec)?)));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::OpAssign(is_op_assign.1, Box::new(expr), Box::new(self.parse_expression(prec)?), line), line);
             } else if self.current_token.token_type == TokenType::QuestionMark {
                 self.next_token()?;
                 let middle = self.parse_expression(0)?;
                 self.consume(TokenType::Colon)?;
                 let right = self.parse_expression(prec)?;
-                expr = nodes::Expression::new(nodes::ExpressionEnum::Conditional(Box::new(expr), Box::new(middle), Box::new(right)));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::Conditional(Box::new(expr), Box::new(middle), Box::new(right), line), line);
             } else if self.current_token.token_type == TokenType::Increment || self.current_token.token_type == TokenType::Decrement {
                 if self.current_token.token_type == TokenType::Increment {
-                    expr = nodes::Expression::new(nodes::ExpressionEnum::Increment(Box::new(expr)));
+                    expr = nodes::Expression::new(nodes::ExpressionEnum::Increment(Box::new(expr), line), line);
                 } else {
-                    expr = nodes::Expression::new(nodes::ExpressionEnum::Decrement(Box::new(expr)));
+                    expr = nodes::Expression::new(nodes::ExpressionEnum::Decrement(Box::new(expr), line), line);
                 }
                 self.next_token()?;
             } else {
                 let op = self.convert_binop(&self.current_token.token_type);
                 self.next_token()?;
                 let right = self.parse_expression(prec + 1)?;
-                expr = nodes::Expression::new(nodes::ExpressionEnum::Binop(op, Box::new(expr), Box::new(right)));
+                expr = nodes::Expression::new(nodes::ExpressionEnum::Binop(op, Box::new(expr), Box::new(right), line), line);
             }
         }
 
@@ -827,12 +851,13 @@ impl Parser {
     fn parse_factor(&mut self) -> Result<nodes::Expression, errors::Error> {
         let mut fac = self.parse_primary_factor()?;
         loop {
+            let line = self.current_token.line;
             match self.current_token.token_type {
                 TokenType::LBracket => {
                     self.next_token()?;
                     let idx = self.parse_expression(0)?;
                     self.consume(TokenType::RBracket)?;
-                    fac = nodes::Expression::new(nodes::ExpressionEnum::Subscript(Box::new(fac), Box::new(idx)));
+                    fac = nodes::Expression::new(nodes::ExpressionEnum::Subscript(Box::new(fac), Box::new(idx), line), line);
                 },
                 TokenType::Period => {
                     self.next_token()?;
@@ -841,7 +866,7 @@ impl Parser {
                         _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected identifier, got {:?}", self.current_token.token_type), self.current_token.line)),
                     };
                     self.next_token()?;
-                    fac = nodes::Expression::new(nodes::ExpressionEnum::Dot(Box::new(fac), field));
+                    fac = nodes::Expression::new(nodes::ExpressionEnum::Dot(Box::new(fac), field, line), line);
                 },
                 TokenType::Arrow => {
                     self.next_token()?;
@@ -850,7 +875,7 @@ impl Parser {
                         _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected identifier, got {:?}", self.current_token.token_type), self.current_token.line)),
                     };
                     self.next_token()?;
-                    fac = nodes::Expression::new(nodes::ExpressionEnum::Arrow(Box::new(fac), field));
+                    fac = nodes::Expression::new(nodes::ExpressionEnum::Arrow(Box::new(fac), field, line), line);
                 }
                 _ => return Ok(fac),
             }
@@ -906,18 +931,19 @@ impl Parser {
 
     fn parse_primary_factor(&mut self) -> Result<nodes::Expression, errors::Error> {
         let cur_tok = self.current_token.token_type.clone();
+        let line = self.current_token.line;
         Ok(match cur_tok {
             TokenType::IntegerLiteral(i) => {
                 self.next_token()?;
-                nodes::Expression::new(nodes::ExpressionEnum::IntegerLiteral(i))
+                nodes::Expression::new(nodes::ExpressionEnum::IntegerLiteral(i, line), line)
             }
             TokenType::CharLiteral(ch) => {
                 self.next_token()?;
-                nodes::Expression::new(nodes::ExpressionEnum::CharLiteral(ch))
+                nodes::Expression::new(nodes::ExpressionEnum::CharLiteral(ch, line), line)
             }
             TokenType::StringLiteral(s) => {
                 self.next_token()?;
-                nodes::Expression::new(nodes::ExpressionEnum::StringLiteral(s))
+                nodes::Expression::new(nodes::ExpressionEnum::StringLiteral(s, line), line)
             }
             TokenType::Keyword(kwd) => {
                 if kwd == "sizeof" {
@@ -928,9 +954,9 @@ impl Parser {
                         let types = self.parse_types()?;
                         let (type_, _) = self.parse_type_and_storage_class(types)?;
                         self.consume(TokenType::RParen)?;
-                        nodes::Expression::new(nodes::ExpressionEnum::SizeOfType(type_))
+                        nodes::Expression::new(nodes::ExpressionEnum::SizeOfType(type_, line), line)
                     } else {
-                        nodes::Expression::new(nodes::ExpressionEnum::SizeOf(Box::new(self.parse_expression(1)?)))
+                        nodes::Expression::new(nodes::ExpressionEnum::SizeOf(Box::new(self.parse_expression(1)?), line), line)
                     }
                 } else {
                     return Err(errors::Error::new(errors::ErrorType::Error, format!("Unexpected keyword {:?} in expression", kwd), self.current_token.line));
@@ -950,9 +976,9 @@ impl Parser {
                         }
                     }
                     self.next_token()?;
-                    nodes::Expression::new(nodes::ExpressionEnum::FunctionCall(ident, args))
+                    nodes::Expression::new(nodes::ExpressionEnum::FunctionCall(ident, args, line), line)
                 } else {
-                    nodes::Expression::new(nodes::ExpressionEnum::Var(ident))
+                    nodes::Expression::new(nodes::ExpressionEnum::Var(ident, line), line)
                 }
             }
             TokenType::Tilde | TokenType::Minus |
@@ -975,6 +1001,7 @@ impl Parser {
 
     fn check_for_cast(&mut self) -> Result<Option<nodes::Expression>, errors::Error> {
         if self.is_valid_var_starter(&self.current_token.token_type) {
+            let line = self.current_token.line;
             // explicit cast
             let types = self.parse_types()?;
 
@@ -992,7 +1019,7 @@ impl Parser {
 
             let expr = self.parse_expression(0)?;
 
-            return Ok(Some(nodes::Expression::new(nodes::ExpressionEnum::Cast(type_, Box::new(expr)))));
+            return Ok(Some(nodes::Expression::new(nodes::ExpressionEnum::Cast(type_, Box::new(expr), line), line)));
         } else { Ok(None) }
     }
 }

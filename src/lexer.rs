@@ -331,7 +331,7 @@ impl Lexer {
 
         match num {
             Ok(n) => n as i16,
-            Err(_) => panic!("Failed to parse number"),
+            Err(_) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Failed to parse number"),
         }
     }
 }

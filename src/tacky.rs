@@ -24,7 +24,7 @@ impl Tacky {
 
         for decl in self.program.statements.clone() {
             match decl {
-                nodes::Declaration::VarDecl(var) => {
+                nodes::Declaration::VarDecl(var, _) => {
                     let name = &var.name;
 
                     let table_entry = self.symbol_table.lookup(name).unwrap();
@@ -47,7 +47,7 @@ impl Tacky {
                         val,
                     ));
                 }
-                nodes::Declaration::FuncDecl(func) => {
+                nodes::Declaration::FuncDecl(func, _) => {
                     let mut body: Vec<definition::Instruction> = Vec::new();
                     let mut params: Vec<(String, definition::Type)> = Vec::with_capacity(func.params.len());
                     
@@ -91,8 +91,8 @@ impl Tacky {
 
                     statements.push(definition::TopLevel::FuncDef(func));
                 }
-                nodes::Declaration::Empty |
-                nodes::Declaration::StructDecl(_) => (),
+                nodes::Declaration::Empty(_) |
+                nodes::Declaration::StructDecl(_, _) => (),
             }
         }
 
@@ -103,11 +103,11 @@ impl Tacky {
 
     fn emit_block_item(&mut self, stmt: &nodes::BlockItem, body: &mut Vec<definition::Instruction>) {
         match stmt {
-            nodes::BlockItem::Statement(ref inner_stmt) => {
+            nodes::BlockItem::Statement(ref inner_stmt, _) => {
                 self.emit_statement(inner_stmt, body);
             }
-            nodes::BlockItem::Declaration(ref decl) => {
-                if let nodes::Declaration::VarDecl(ref decl) = decl {
+            nodes::BlockItem::Declaration(ref decl, _) => {
+                if let nodes::Declaration::VarDecl(ref decl, _) = decl {
                     // we only care about variable declarations
 
                     if decl.expr.is_some() {
@@ -125,7 +125,7 @@ impl Tacky {
 
     fn handle_initializer(&mut self, init: &nodes::Initializer, body: &mut Vec<definition::Instruction>, name: &str, ty: &definition::Type, mut offset: i16, top_level: bool) {
         match init {
-            nodes::Initializer::Single(ref expr) => {
+            nodes::Initializer::Single(ref expr, _) => {
                 let val = self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
                 if !top_level {
                     body.push(definition::Instruction::CopyToOffset(val, definition::Val::Var(name.to_string(), ty.clone()), offset as i16));
@@ -133,7 +133,7 @@ impl Tacky {
                     body.push(definition::Instruction::Copy(definition::Val::Var(name.to_string(), ty.clone()), val));
                 }
             }
-            nodes::Initializer::Compound(ref inits) => {
+            nodes::Initializer::Compound(ref inits, _) => {
                 match ty {
                     definition::Type::Array(inner_ty, _) => {
                         if name == "localvar.input.40" {
@@ -151,7 +151,7 @@ impl Tacky {
                             self.handle_initializer(init, body, name, ty, offset + member_offset, false);
                         }
                     }
-                    _ => panic!("Invalid compound initializer"),
+                    _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected array or struct in compound init, got {:?}", ty),
                 }
             }
         }
@@ -159,17 +159,17 @@ impl Tacky {
 
     fn emit_statement(&mut self, stmt: &nodes::Statement, body: &mut Vec<definition::Instruction>) {
         match stmt {
-            nodes::Statement::Return(ref expr) => {
+            nodes::Statement::Return(ref expr, _) => {
                 let val = match expr {
                     Some(expr) => Some(self.emit_tacky_and_convert(&expr.expr, body, &expr.ty)),
                     None => None,
                 };
                 body.push(definition::Instruction::Return(val));
             }
-            nodes::Statement::Expression(ref expr) => {
+            nodes::Statement::Expression(ref expr, _) => {
                 self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
             }
-            nodes::Statement::If(cond, then, else_) => {
+            nodes::Statement::If(cond, then, else_, _) => {
                 let end_label = self.make_temporary();
                 let val = self.emit_tacky_and_convert(&cond.expr, body, &cond.ty);
                 body.push(definition::Instruction::JumpIfZero(val, end_label.clone()));
@@ -184,18 +184,18 @@ impl Tacky {
                 }
                 body.push(definition::Instruction::Label(end_label));
             }
-            nodes::Statement::Compound(stmts) => {
+            nodes::Statement::Compound(stmts, _) => {
                 for stmt in stmts {
                     self.emit_block_item(stmt, body);
                 }
             }
-            nodes::Statement::Break(label) => {
+            nodes::Statement::Break(label, _) => {
                 body.push(definition::Instruction::Jump(format!("{}.break", label)))
             }
-            nodes::Statement::Continue(label) => {
+            nodes::Statement::Continue(label, _) => {
                 body.push(definition::Instruction::Jump(format!("{}.continue", label)))
             }
-            nodes::Statement::While(cond, loop_body, label) => {
+            nodes::Statement::While(cond, loop_body, label, _) => {
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
                 body.push(definition::Instruction::Label(continue_label.clone()));
@@ -205,7 +205,7 @@ impl Tacky {
                 body.push(definition::Instruction::Jump(continue_label.clone()));
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
-            nodes::Statement::DoWhile(loop_body, cond, label) => {
+            nodes::Statement::DoWhile(loop_body, cond, label, _) => {
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
                 body.push(definition::Instruction::Label(continue_label.clone()));
@@ -214,14 +214,14 @@ impl Tacky {
                 body.push(definition::Instruction::JumpIfNotZero(val, continue_label.clone()));
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
-            nodes::Statement::For(init, cond, post, loop_body, label) => {
+            nodes::Statement::For(init, cond, post, loop_body, label, _) => {
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
                 match init {
-                    nodes::ForInit::Declaration(ref decl) => {
+                    nodes::ForInit::Declaration(ref decl, _) => {
                         let decl = match decl {
-                            nodes::Declaration::VarDecl(ref decl) => decl,
-                            _ => panic!("Invalid for loop initializer"),
+                            nodes::Declaration::VarDecl(ref decl, _) => decl,
+                            _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected VarDecl in ForInit::Declaration, got {:?}", decl),
                         };
 
                         if decl.expr.is_some() {
@@ -229,10 +229,10 @@ impl Tacky {
                             self.handle_initializer(&expr, body, &decl.name, &decl.ty, 0, true);
                         }
                     }
-                    nodes::ForInit::Expression(ref expr) => {
+                    nodes::ForInit::Expression(ref expr, _) => {
                         self.emit_tacky_and_convert(&expr.expr, body, &expr.ty);
                     }
-                    nodes::ForInit::Empty => {}
+                    nodes::ForInit::Empty(_) => {}
                 }
                 body.push(definition::Instruction::Label(continue_label.clone()));
                 if cond.is_some() {
@@ -248,7 +248,7 @@ impl Tacky {
                 body.push(definition::Instruction::Jump(continue_label.clone()));
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
-            nodes::Statement::Empty => {}
+            nodes::Statement::Empty(_) => {}
         }
     }
 
@@ -290,10 +290,10 @@ impl Tacky {
 
     fn emit_expression(&mut self, expr: &nodes::ExpressionEnum, body: &mut Vec<definition::Instruction>, ty: &definition::Type) -> definition::Val {
         match expr {
-            nodes::ExpressionEnum::IntegerLiteral(i) => {
+            nodes::ExpressionEnum::IntegerLiteral(i, _) => {
                 definition::Val::Const(*i)
             }
-            nodes::ExpressionEnum::Unop(op, ref expr) => {
+            nodes::ExpressionEnum::Unop(op, ref expr, _) => {
                 let src = self.emit_tacky_and_convert(&expr.expr, body, ty);
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), expr.ty.clone());
@@ -305,7 +305,7 @@ impl Tacky {
                 body.push(definition::Instruction::Unary(tacky_op, src, dest.clone()));
                 dest
             }
-            nodes::ExpressionEnum::Binop(op, ref lft, ref rht) => {
+            nodes::ExpressionEnum::Binop(op, ref lft, ref rht, _) => {
                 let dest_name = self.make_temporary();
                 let dest = definition::Val::Var(dest_name.clone(), lft.ty.clone());
 
@@ -355,10 +355,10 @@ impl Tacky {
                 body.push(definition::Instruction::Binary(tacky_op, lhs, rhs, dest.clone()));
                 dest
             }
-            nodes::ExpressionEnum::Var(s) => {
+            nodes::ExpressionEnum::Var(s, _) => {
                 definition::Val::Var(s.clone(), self.symbol_table.lookup(s).unwrap().0.clone())
             }
-            nodes::ExpressionEnum::Assign(ref lhs, ref rhs) => {
+            nodes::ExpressionEnum::Assign(ref lhs, ref rhs, _) => {
                 let lval = self.emit_expression(&lhs.expr, body, &lhs.ty);
                 let rval = self.emit_tacky_and_convert(&rhs.expr, body, ty);
 
@@ -377,7 +377,7 @@ impl Tacky {
                     }
                 }
             }
-            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs) => {
+            nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs, _) => {
                 let lval = self.emit_expression(&lhs.expr, body, &lhs.ty);
                 let rval = self.emit_tacky_and_convert(&rhs.expr, body, ty);
 
@@ -418,7 +418,7 @@ impl Tacky {
                     }
                 }
             }
-            nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht) => {
+            nodes::ExpressionEnum::Conditional(ref cond, ref lft, ref rht, _) => {
                 let e2_label = self.make_temporary();
                 let end_label = self.make_temporary();
                 let cond = self.emit_tacky_and_convert(&cond.expr, body, ty);
@@ -443,7 +443,7 @@ impl Tacky {
                     dest
                 }
             }
-            nodes::ExpressionEnum::Increment(ref expr) => {
+            nodes::ExpressionEnum::Increment(ref expr, _) => {
                 let lval = self.emit_expression(&expr.expr, body, &expr.ty);
 
                 match lval {
@@ -469,7 +469,7 @@ impl Tacky {
                     }
                 }
             }
-            nodes::ExpressionEnum::Decrement(ref expr) => {
+            nodes::ExpressionEnum::Decrement(ref expr, _) => {
                 let lval = self.emit_expression(&expr.expr, body, &expr.ty);
 
                 match lval {
@@ -495,7 +495,7 @@ impl Tacky {
                     }
                 }
             }
-            nodes::ExpressionEnum::FunctionCall(ref ident, ref args) => {
+            nodes::ExpressionEnum::FunctionCall(ref ident, ref args, _) => {
                 let mut arg_vals = Vec::new();
                 for arg in args {
                     arg_vals.push(self.emit_tacky_and_convert(&arg.expr, body, &arg.ty));
@@ -521,11 +521,11 @@ impl Tacky {
                     definition::Val::Const(0)
                 }
             }
-            nodes::ExpressionEnum::Dereference(ref expr) => {
+            nodes::ExpressionEnum::Dereference(ref expr, _) => {
                 let res = self.emit_tacky_and_convert(&expr.expr, body, ty);
                 definition::Val::DereferencedPtr(Box::new(res))
             }
-            nodes::ExpressionEnum::AddressOf(ref expr) => {
+            nodes::ExpressionEnum::AddressOf(ref expr, _) => {
                 let src = self.emit_expression(&expr.expr, body, &expr.ty);
                 match src {
                     definition::Val::DereferencedPtr(ptr) => *ptr,
@@ -545,7 +545,7 @@ impl Tacky {
                     }
                 }
             }
-            nodes::ExpressionEnum::Subscript(ref left, ref right) => {
+            nodes::ExpressionEnum::Subscript(ref left, ref right, _) => {
                 let left = self.emit_tacky_and_convert(&left.expr, body, ty);
                 let right = self.emit_tacky_and_convert(&right.expr, body, ty);
 
@@ -556,10 +556,10 @@ impl Tacky {
                 body.push(definition::Instruction::AddPtr(left.clone(), right.clone(), ty.size() as i16, dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
-            nodes::ExpressionEnum::CharLiteral(ch) => {
+            nodes::ExpressionEnum::CharLiteral(ch, _) => {
                 definition::Val::Const(Self::char_to_int(*ch))
             }
-            nodes::ExpressionEnum::Cast(to, ref expr) => {
+            nodes::ExpressionEnum::Cast(to, ref expr, _) => {
                 if to == &nodes::Type::Void {
                     self.emit_tacky_and_convert(&expr.expr, body, to);
                     return definition::Val::Const(0);
@@ -567,16 +567,16 @@ impl Tacky {
 
                 self.emit_tacky_and_convert(&expr.expr, body, to)
             }
-            nodes::ExpressionEnum::SizeOf(expr) => {
+            nodes::ExpressionEnum::SizeOf(expr, _) => {
                 definition::Val::Const(expr.ty.size() as i16)
             }
-            nodes::ExpressionEnum::SizeOfType(ty) => {
+            nodes::ExpressionEnum::SizeOfType(ty, _) => {
                 definition::Val::Const(match ty {
                     nodes::Type::Struct(tag) => self.type_table.lookup(tag).unwrap().0 as i16,
                     _ => ty.size() as i16,
                 })
             }
-            nodes::ExpressionEnum::Dot(ref expr, ref member) => {
+            nodes::ExpressionEnum::Dot(ref expr, ref member, _) => {
                 let struct_tag = match &expr.ty {
                     nodes::Type::Struct(tag) => tag,
                     _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected struct type, got {:?}", expr.ty),
@@ -597,16 +597,16 @@ impl Tacky {
                         definition::Val::DereferencedPtr(Box::new(dest))
                     }
                     definition::Val::Var(ident, ty) => definition::Val::SubObject((ident, ty), member_offset as i16),
-                    definition::Val::Const(_) => panic!("Cannot access member of constant"),
+                    definition::Val::Const(_) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected Var or SubObject, got Const"),
                 }
             },
-            nodes::ExpressionEnum::Arrow(ref expr, ref member) => {
+            nodes::ExpressionEnum::Arrow(ref expr, ref member, _) => {
                 let struct_tag = match &expr.ty {
                     nodes::Type::Pointer(inner) => match inner.as_ref() {
                         nodes::Type::Struct(tag) => tag,
-                        _ => panic!("Expected struct type, got {:?}", inner),
+                        _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected struct type, got {:?}", inner),
                     },
-                    _ => panic!("Expected struct type, got {:?}", expr.ty),
+                    _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected pointer type, got {:?}", expr.ty),
                 };
                 let member_entry = self.type_table.lookup_member_entry(&struct_tag, member).unwrap();
                 let member_offset = member_entry.offset as i16;
@@ -620,16 +620,17 @@ impl Tacky {
                 body.push(definition::Instruction::AddPtr(expr.clone(), definition::Val::Const(member_offset as i16), 1, dest.clone()));
                 definition::Val::DereferencedPtr(Box::new(dest))
             },
-            nodes::ExpressionEnum::StringLiteral(s) => {
+            nodes::ExpressionEnum::StringLiteral(s, _) => {
                 // we turn this into a var = array of characters (so s+'\0')
                 let mut chars = s.chars().collect::<Vec<char>>();
 
                 chars.push('\0');
 
                 let init = nodes::Initializer::Compound(chars.into_iter().map(|c| nodes::Initializer::Single(nodes::Expression {
-                    expr: nodes::ExpressionEnum::CharLiteral(c),
+                    expr: nodes::ExpressionEnum::CharLiteral(c, 0),
                     ty: nodes::Type::Char,
-                })).collect());
+                    line: 0,
+                }, 0)).collect(), 0);
 
                 let name = self.make_temporary();
                 let ty = definition::Type::Array(Box::new(definition::Type::Char), s.len() as i16 + 1);
