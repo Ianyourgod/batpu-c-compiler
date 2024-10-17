@@ -11,6 +11,17 @@ mod emitter;
 mod errors;
 
 #[derive(Clone)]
+pub struct TestSettings {
+    pub lexer: bool,
+    pub parser: bool,
+    pub semantic_analysis: bool,
+    pub tacky: bool,
+    pub t_optimizations: bool,
+    pub code_gen: bool,
+    pub emitter: bool,
+}
+
+#[derive(Clone)]
 pub struct Settings {
     pub link_files: Vec<String>,
     pub input_names: Vec<String>,
@@ -20,6 +31,8 @@ pub struct Settings {
     pub include_comments: bool,
     pub dont_optimize: bool,
     pub include_directives: bool,
+
+
 }
 
 fn parse_args() -> Settings {
@@ -140,6 +153,9 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     // create dir called "tmpcb" to store files
     std::fs::create_dir_all(".tmpcb").expect("Failed to create directory");
 
+    // replace all / with _
+    let input_file_for_tmp = input_file.replace("/", "_");
+
     // preprocess input
     // call "gcc -E -P input_file -o .tmpcb/input_file.i"
     let mut binding = std::process::Command::new("gcc");
@@ -148,7 +164,7 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
         .arg("-P")
         .arg(input_file)
         .arg("-o")
-        .arg(format!(".tmpcb/{}.i", input_file))
+        .arg(format!(".tmpcb/{}.i", input_file_for_tmp))
         .output()
         .expect("Failed to execute command");
 
@@ -159,13 +175,13 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     }
 
     // read preprocessed file
-    let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_file)).expect("Failed to read file");
+    let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_file_for_tmp)).expect("Failed to read file");
 
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer)?;
     let program = parser.parse_program()?;
 
-    //println!("{:#?}", program.statements.get(15));
+    println!("{:#?}", program);
     
     #[allow(unused_variables)]
     let (program, symbol_table, type_table) = semantic_analysis::resolve(program)?;
@@ -202,12 +218,14 @@ fn main() {
     for input_name in &args.input_names {
         let output = compile(input_name, args.clone());
 
+        let tmp_input = input_name.replace("/", "_");
+
         let output = match output {
             Ok(output) => output,
             Err(err) => {
-                let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_name)).expect("Failed to read file");
+                let input = std::fs::read_to_string(format!(".tmpcb/{}.i", tmp_input)).expect("Failed to read file");
                 let lines: Vec<&str> = input.split('\n').collect();
-                err.print(&lines[err.line - 1], input_name);
+                err.print(&lines[err.line - 1], &tmp_input);
                 exit(1);
             },
         };

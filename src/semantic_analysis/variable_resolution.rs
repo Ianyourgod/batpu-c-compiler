@@ -170,7 +170,7 @@ impl VariableResolution {
         let mut new_params: Vec<String> = Vec::with_capacity(decl.params.len());
 
         for param in &decl.params {
-            if context.variable_map.contains_key(param) {
+            if inner_map.variable_map.contains_key(param) && inner_map.variable_map.get(param).unwrap().from_current_scope {
                 return Err(errors::Error::new(errors::ErrorType::Error, format!("Variable {:?} already declared", param), decl.line));
             }
             
@@ -279,8 +279,15 @@ impl VariableResolution {
                     nodes::Declaration::StructDecl(decl, line) => {
                         nodes::BlockItem::Declaration(nodes::Declaration::StructDecl(self.resolve_struct_declaration(decl, context)?, *line), *line)
                     }
-                    nodes::Declaration::FuncDecl(_, _) => {
-                        unimplemented!("Function declarations not allowed in block items");
+                    nodes::Declaration::FuncDecl(decl, line) => {
+                        // if it has a body, error
+                        if decl.body.len() > 0 {
+                            return Err(errors::Error::new(errors::ErrorType::Error, String::from("Function definition not allowed in block"), *line));
+                        }
+
+                        let func = self.resolve_function_declaration(decl, context)?;
+
+                        nodes::BlockItem::Declaration(nodes::Declaration::FuncDecl(func, *line), *line)
                     }
                     nodes::Declaration::Empty(line) => nodes::BlockItem::Declaration(nodes::Declaration::Empty(*line), *line),
                 }
@@ -353,16 +360,11 @@ impl VariableResolution {
                 nodes::Statement::DoWhile(body, cond, String::new(), *line)
             },
             nodes::Statement::For(ref init, ref cond, ref post, ref body, _, line) => {
+                let mut new_var_map = context.clone();
+
                 let init = match init {
                     nodes::ForInit::Declaration(ref decl, line) => {
                         let decl = match decl { nodes::Declaration::VarDecl(ref decl, _) => decl, _ => return Err(errors::Error::new(errors::ErrorType::Error, String::from("Expected variable declaration in for"), *line)) };
-
-                        if context.variable_map.contains_key(&decl.name) {
-                            let old_decl = context.variable_map.get(&decl.name).unwrap();
-                            if old_decl.from_current_scope && !(old_decl.has_external_linkage && decl.storage_class == nodes::StorageClass::Extern) {
-                                return Err(errors::Error::new(errors::ErrorType::Error, format!("Conflicting local declarations of variable {:?}", decl.name), *line));
-                            }
-                        }
 
                         if decl.storage_class == nodes::StorageClass::Extern {
                             return Err(errors::Error::new(errors::ErrorType::Error, String::from("Extern storage class not allowed in for"), *line));
@@ -372,7 +374,7 @@ impl VariableResolution {
         
                         let unique_name = self.generate_unique_name("loopvar", &orig_name);
 
-                        context.variable_map.insert(decl.name.clone(), VarData {
+                        new_var_map.variable_map.insert(decl.name.clone(), VarData {
                             name: unique_name.clone(),
                             has_expr: decl.expr.is_some(),
                             from_current_scope: true,
@@ -381,8 +383,8 @@ impl VariableResolution {
         
                         if decl.expr.is_some() {
                             let expr = decl.expr.as_ref().unwrap();
-                            let val = self.resolve_init(expr, context)?;
-                            let ty = self.resolve_type(&decl.ty, context)?;
+                            let val = self.resolve_init(expr, &mut new_var_map)?;
+                            let ty = self.resolve_type(&decl.ty, &new_var_map)?;
                             nodes::ForInit::Declaration(nodes::Declaration::VarDecl(nodes::VarDecl {
                                 name: unique_name,
                                 expr: Some(val),
@@ -395,23 +397,23 @@ impl VariableResolution {
                         }
                     },
                     nodes::ForInit::Expression(ref expr, line) => {
-                        let expr = self.resolve_expression(expr, context)?;
+                        let expr = self.resolve_expression(expr, &new_var_map)?;
                         nodes::ForInit::Expression(expr, *line)
                     },
                     nodes::ForInit::Empty(line) => nodes::ForInit::Empty(*line),
                 };
 
                 let cond = match cond {
-                    Some(ref expr) => Some(self.resolve_expression(expr, context)?),
+                    Some(ref expr) => Some(self.resolve_expression(expr, &new_var_map)?),
                     None => None,
                 };
 
                 let post = match post {
-                    Some(ref expr) => Some(self.resolve_expression(expr, context)?),
+                    Some(ref expr) => Some(self.resolve_expression(expr, &new_var_map)?),
                     None => None,
                 };
 
-                let body = Box::new(self.resolve_statement(&**body, context)?);
+                let body = Box::new(self.resolve_statement(&**body, &mut new_var_map)?);
 
                 nodes::Statement::For(init, cond, post, body, String::new(), *line)
             },

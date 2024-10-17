@@ -61,6 +61,7 @@ pub enum Binop {
     Subtract,
     Multiply,
     Divide,
+    Modulus,
     LogicalAnd,
     LogicalOr,
     Equal,

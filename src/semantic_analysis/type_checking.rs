@@ -568,6 +568,14 @@ impl TypeChecker {
                     line,
                 )) };
 
+                if args.len() != fn_type.len() {
+                    return Err(errors::Error::new(
+                        errors::ErrorType::Error,
+                        format!("Expected {} arguments, got {}", fn_type.len(), args.len()),
+                        line,
+                    ));
+                }
+
                 let mut new_args = Vec::with_capacity(args.len());
                 for (idx, arg) in args.iter().enumerate() {
                     let arg = self.typecheck_and_convert(arg)?;

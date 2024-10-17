@@ -33,6 +33,7 @@ pub enum TokenType {
     Minus,
     Star,
     Slash,
+    Percent,
     Tilde,
     QuestionMark,
     Colon,
@@ -46,6 +47,7 @@ pub enum TokenType {
     SubAssign,
     MulAssign,
     DivAssign,
+    ModAssign,
 
     Increment,
     Decrement,
@@ -173,6 +175,10 @@ impl Lexer {
                 TokenType::Slash,
                 ('=', TokenType::DivAssign)
             ),
+            '%' => after_char!(self, self.peek_char(),
+                TokenType::Percent,
+                ('=', TokenType::ModAssign)
+            ),
             '~' => TokenType::Tilde,
             '=' => after_char!(self, self.peek_char(),
                 TokenType::Equals,
@@ -269,7 +275,7 @@ impl Lexer {
                     });
                 } else if is_digit(self.ch) {
                     return Ok(Token {
-                        token_type: TokenType::IntegerLiteral(self.read_number()),
+                        token_type: TokenType::IntegerLiteral(self.read_number()?),
                         line: cur_line,
                     });
                 } else {
@@ -322,17 +328,24 @@ impl Lexer {
         self.input[start..self.position].to_string()
     }
 
-    fn read_number(&mut self) -> i16 {
+    fn read_number(&mut self) -> Result<i16, errors::Error> {
         let start = self.position;
+        let start_line = self.current_line;
         while is_digit(self.ch) {
             self.read_char();
         }
         let num = self.input[start..self.position].parse::<i16>();
 
-        match num {
-            Ok(n) => n as i16,
-            Err(_) => unreachable!("INTERNAL ERROR. PLEASE REPORT: Failed to parse number"),
+        let n = match num {
+            Ok(n) => n,
+            Err(h) => return Err(errors::Error::new(errors::ErrorType::Error, h.to_string(), start_line)),
+        };
+
+        if n < -128 || n > 255 {
+            return Err(errors::Error::new(errors::ErrorType::Error, "Number out of range".to_string(), start_line));
         }
+
+        Ok(n)
     }
 }
 

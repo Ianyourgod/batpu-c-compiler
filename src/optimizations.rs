@@ -67,7 +67,6 @@ pub fn optimize_function(func: Vec<definition::Instruction>) -> (Vec<definition:
 
         let mut dead_store_elimination = dead_store_elimination::DeadStoreElimination::new(cfg, aliased_vars);
         let cfg = dead_store_elimination.eliminate();
-
         let optimized_function_body = cfg::cfg_to_func_def(cfg);
 
         if function_body == optimized_function_body || optimized_function_body.len() == 0 {

@@ -22,8 +22,8 @@ impl ConstantFolding {
 
                     if is_const1 && is_const2 {
                         let result = match op {
-                            definition::Binop::Add => val1 + val2,
-                            definition::Binop::Subtract => val1 - val2,
+                            definition::Binop::Add => (val1 as i32).wrapping_add(val2 as i32) as i16,
+                            definition::Binop::Subtract => (val1 as i32).wrapping_sub(val2 as i32) as i16,
                             definition::Binop::LogicalAnd => val1 & val2,
                             definition::Binop::LogicalOr => val1 | val2,
                             definition::Binop::Equal => if val1 == val2 { 1 } else { 0 },
@@ -35,7 +35,20 @@ impl ConstantFolding {
                             definition::Binop::LeftShift => val1 << val2,
                             definition::Binop::RightShift => val1 >> val2,
                             definition::Binop::Multiply => val1 * val2,
-                            definition::Binop::Divide => val1 / val2,
+                            definition::Binop::Divide => {
+                                if val2 == 0 {
+                                    out.push(instruction.clone());
+                                    continue;
+                                }
+                                val1 / val2
+                            },
+                            definition::Binop::Modulus => {
+                                if val2 == 0 {
+                                    out.push(instruction.clone());
+                                    continue;
+                                }
+                                val1 % val2
+                            },
                             definition::Binop::BitwiseAnd => val1 & val2,
                             definition::Binop::BitwiseXor => val1 ^ val2,
                             definition::Binop::Nor => !(val1 | val2),

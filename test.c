@@ -1,10 +1,11 @@
-struct Abc {
-    int a;
-    int b;
-};
+int main(void) {
+    int a = 10;
+    int b = 20;
+    for (b = -20; b < 0; b = b + 1) {
+        a = a - 1;
+        if (a <= 0)
+            break;
+    }
 
-int main() {
-    struct Abc abc = {1, 2};
-
-    return abcd.a;
+    return a == 0 && b == -11;
 }

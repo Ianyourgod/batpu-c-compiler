@@ -297,7 +297,6 @@ impl ConvertPass {
                         return;
                     }
                     definition::Binop::Divide => {
-                        // we just call the __mult function
                         instructions.push(assembly::Instruction::Mov(
                             self.convert_val(src1),
                             assembly::Operand::Register(assembly::Register::new("r1".to_string()))
@@ -309,6 +308,22 @@ impl ConvertPass {
                         instructions.push(assembly::Instruction::Call("__div".to_string(), false));
                         instructions.push(assembly::Instruction::Mov(
                             assembly::Operand::Register(assembly::Register::new("r1".to_string())),
+                            self.convert_val(dst)
+                        ));
+                        return;
+                    }
+                    definition::Binop::Modulus => {
+                        instructions.push(assembly::Instruction::Mov(
+                            self.convert_val(src1),
+                            assembly::Operand::Register(assembly::Register::new("r1".to_string()))
+                        ));
+                        instructions.push(assembly::Instruction::Mov(
+                            self.convert_val(src2),
+                            assembly::Operand::Register(assembly::Register::new("r2".to_string()))
+                        ));
+                        instructions.push(assembly::Instruction::Call("__div".to_string(), false));
+                        instructions.push(assembly::Instruction::Mov(
+                            assembly::Operand::Register(assembly::Register::new("r2".to_string())),
                             self.convert_val(dst)
                         ));
                         return;
@@ -398,6 +413,8 @@ impl ConvertPass {
                     self.generate_comparison(op, dst, instructions);
                     return;
                 }
+
+                println!("{:?}", op);
 
                 instructions.push(assembly::Instruction::Binary(
                     self.convert_binop(op),

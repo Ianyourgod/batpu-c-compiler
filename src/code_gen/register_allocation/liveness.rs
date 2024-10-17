@@ -152,10 +152,23 @@ impl LivenessAnalysis {
 
             match r {
                 assembly::Operand::Memory(reg, _) => {
+                    match reg.name.as_str() {
+                        "r14" |
+                        "rsp" |
+                        "r15" |
+                        "rbp" => continue,
+                        _ => ()
+                    }
                     new_read.push(assembly::Operand::Register(reg.clone()));
                 }
-                assembly::Operand::Register(_) => {
-                    new_read.push(r.clone());
+                assembly::Operand::Register(reg) => {
+                    match reg.name.as_str() {
+                        "r14" |
+                        "rsp" |
+                        "r15" |
+                        "rbp" => continue,
+                        _ => new_read.push(r.clone())
+                    }
                 }
 
                 assembly::Operand::Pseudo(name, ty) => {
@@ -183,10 +196,23 @@ impl LivenessAnalysis {
 
             match u {
                 assembly::Operand::Memory(reg, _) => {
+                    match reg.name.as_str() {
+                        "r14" |
+                        "rsp" |
+                        "r15" |
+                        "rbp" => continue,
+                        _ => ()
+                    }
                     new_read.push(assembly::Operand::Register(reg.clone()));
                 }
-                assembly::Operand::Register(_) => {
-                    new_updated.push(u.clone());
+                assembly::Operand::Register(reg) => {
+                    match reg.name.as_str() {
+                        "r14" |
+                        "rsp" |
+                        "r15" |
+                        "rbp" => continue,
+                        _ => new_updated.push(u.clone())
+                    }
                 }
 
                 assembly::Operand::Pseudo(name, ty) => {

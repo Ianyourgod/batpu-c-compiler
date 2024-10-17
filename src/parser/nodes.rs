@@ -205,6 +205,7 @@ pub enum Binop {
     Subtract,
     Multiply,
     Divide,
+    Modulus,
     And,
     Or,
     Equal,

@@ -201,7 +201,7 @@ impl Parser {
 
                 params.push((type_, decl));
 
-                if self.current_token.token_type == TokenType::Comma {
+                if self.current_token.token_type == TokenType::Comma && self.lexer.peek_token()?.token_type != TokenType::RParen {
                     self.next_token()?;
                 } else if self.current_token.token_type != TokenType::RParen {
                     return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected ',' or ')', got {:?}", self.current_token), self.current_token.line));
@@ -318,7 +318,7 @@ impl Parser {
                 let mut inits: Vec<nodes::Initializer> = Vec::new();
                 while self.current_token.token_type != TokenType::RBrace {
                     inits.push(self.parse_initializer()?);
-                    if self.current_token.token_type == TokenType::Comma {
+                    if self.current_token.token_type == TokenType::Comma && self.lexer.peek_token()?.token_type != TokenType::RBrace {
                         self.next_token()?;
                     } else if self.current_token.token_type != TokenType::RBrace {
                         return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected '}}' or ',', got {:?}", self.current_token), self.current_token.line));
@@ -671,6 +671,7 @@ impl Parser {
         let init_line = self.current_token.line;
         // parse forinit
         let for_init = if self.current_token.token_type == TokenType::Semicolon {
+            self.consume(TokenType::Semicolon)?;
             nodes::ForInit::Empty(init_line)
         } else if self.is_valid_var_starter(&self.current_token.token_type) {
             let decl = self.parse_declaration()?; // consumes semicolon
@@ -759,7 +760,7 @@ impl Parser {
     fn get_precedence(&self, token: &TokenType) -> i32 {
         match token {
             TokenType::Increment | TokenType::Decrement => 60,
-            TokenType::Star | TokenType::Slash => 55,
+            TokenType::Star | TokenType::Slash | TokenType::Percent => 55,
             TokenType::Plus | TokenType::Minus => 45,
             TokenType::LeftShift | TokenType::RightShift => 40,
             TokenType::LessThan | TokenType::GreaterThan |
@@ -796,6 +797,7 @@ impl Parser {
             TokenType::Ampersand => nodes::Binop::BitwiseAnd,
             TokenType::BitwiseOr => nodes::Binop::BitwiseOr,
             TokenType::BitwiseXor => nodes::Binop::BitwiseXor,
+            TokenType::Percent => nodes::Binop::Modulus,
             _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected binary operator, got {:?}", token),
         }
     }
@@ -969,7 +971,7 @@ impl Parser {
                     let mut args: Vec<nodes::Expression> = Vec::new();
                     while self.current_token.token_type != TokenType::RParen {
                         args.push(self.parse_expression(0)?);
-                        if self.current_token.token_type == TokenType::Comma {
+                        if self.current_token.token_type == TokenType::Comma && self.lexer.peek_token()?.token_type != TokenType::RParen {
                             self.next_token()?;
                         } else if self.current_token.token_type != TokenType::RParen {
                             return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected ',' or ')', got {:?}", self.current_token), self.current_token.line));

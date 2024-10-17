@@ -264,6 +264,7 @@ impl Tacky {
             nodes::Binop::Subtract => definition::Binop::Subtract,
             nodes::Binop::Multiply => definition::Binop::Multiply,
             nodes::Binop::Divide => definition::Binop::Divide,
+            nodes::Binop::Modulus => definition::Binop::Modulus,
             nodes::Binop::And => definition::Binop::LogicalAnd,
             nodes::Binop::Or => definition::Binop::LogicalOr,
             nodes::Binop::Equal => definition::Binop::Equal,

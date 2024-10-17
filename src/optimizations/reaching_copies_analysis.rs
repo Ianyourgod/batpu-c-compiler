@@ -134,10 +134,10 @@ impl ReachingCopiesAnalysis {
         for pred_id in block.get_predecessors() {
             match pred_id {
                 cfg::NodeID::ENTRY => return Vec::new(),
-                cfg::NodeID::EXIT => unreachable!("INTERNAL ERROR. PLEASE REPORT: Mal formed CFG"),
+                cfg::NodeID::EXIT => unreachable!("INTERNAL ERROR. PLEASE REPORT: Malformed CFG"),
                 cfg::NodeID::BlockID(_) => {
                     let pred_out_copies = self.annotations.get_block_annotation(&pred_id).unwrap().copies.clone();
-                    incoming_copies = incoming_copies.into_iter().filter(|item| !pred_out_copies.contains(item)).collect();
+                    incoming_copies = incoming_copies.into_iter().filter(|item| pred_out_copies.contains(item)).collect();
                 }
             }
         }
@@ -185,15 +185,17 @@ impl ReachingCopiesAnalysis {
         }
 
         while worklist.len() > 0 {
-            let block_id = worklist.first().unwrap();
+            //println!("{:?}", worklist);
+            let block_id = worklist.first().unwrap().clone();
+            worklist.remove(0);
 
-            let block = self.get_node_from_id(block_id);
+            let block = self.get_node_from_id(&block_id);
 
-            let old_annotation = self.annotations.get_block_annotation(block_id).unwrap().clone();
+            let old_annotation = self.annotations.get_block_annotation(&block_id).unwrap().clone();
             let incoming_copies = self.meet(&block, &all_copies.copies);
             self.transfer(&block, &Annotation { copies: incoming_copies });
 
-            if old_annotation != *self.annotations.get_block_annotation(block_id).unwrap() {
+            if old_annotation != *self.annotations.get_block_annotation(&block_id).unwrap() {
                 for succ_id in block.get_successors() {
                     match succ_id {
                         cfg::NodeID::ENTRY => unreachable!("INTERNAL ERROR. PLEASE REPORT: Mal formed CFG"),
@@ -206,8 +208,6 @@ impl ReachingCopiesAnalysis {
                     }
                 }
             }
-
-            worklist.remove(0);
         }
     }
 
