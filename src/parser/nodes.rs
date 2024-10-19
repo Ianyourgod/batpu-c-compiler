@@ -13,6 +13,7 @@ pub struct FuncDecl {
     pub storage_class: StorageClass,
     pub ty: Type,
     pub line: usize,
+    pub has_body: bool,
 }
 
 #[derive(Debug, Clone)]

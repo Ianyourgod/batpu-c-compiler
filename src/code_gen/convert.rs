@@ -88,11 +88,12 @@ impl ConvertPass {
         }
     }
 
-    fn classify_parameters(&self, values: Vec<definition::Val>) -> (Vec<(assembly::Operand, assembly::Register)>, Vec<(assembly::Operand, i16)>) { // (registers, stack)
+    fn classify_parameters(&self, values: Vec<definition::Val>) -> (Vec<(assembly::Operand, assembly::Register)>, Vec<(assembly::Operand, i16)>, i16) { // (registers, stack)
         let mut reg_args = Vec::new();
         let mut stack_args = Vec::new();
 
         let param_regs = param_registers!();
+        let mut offset = 0;
 
         for (i, val) in values.iter().enumerate() {
             let converted = self.convert_val(&val);
@@ -100,15 +101,16 @@ impl ConvertPass {
                 reg_args.push((converted, param_regs[i].clone()));
             } else {
                 let size = self.size_of_operand(&converted);
-                stack_args.push((converted, size));
+                stack_args.push((converted, offset));
+                offset += size;
             }
         }
 
-        (reg_args, stack_args)
+        (reg_args, stack_args, offset)
     } 
 
     fn set_up_parameters(&mut self, name: String, params: Vec<definition::Val>, instructions: &mut Vec<assembly::Instruction>) -> i16 {
-        let (reg_args, stack_args) = self.classify_parameters(params);
+        let (reg_args, stack_args, offset) = self.classify_parameters(params);
 
         let mut used_regs = Vec::new();
         for (val, reg) in reg_args {
@@ -122,14 +124,12 @@ impl ConvertPass {
 
         self.function_table.insert(name, used_regs);
 
-        let mut offset = 0;
-        for (val, size) in stack_args {
+        for (val, offset) in stack_args {
             // move the value to the stack
             instructions.push(assembly::Instruction::Mov(
-                assembly::Operand::Memory(assembly::Register::new("r15".to_string()), -offset),
+                assembly::Operand::Memory(assembly::Register::new("r15".to_string()), offset),
                 val
             ));
-            offset += size;
         }
 
         offset
@@ -212,12 +212,33 @@ impl ConvertPass {
                 match op {
                     definition::Unop::LogicalNot => {
                         let src_converted = self.convert_val(src);
-                        instructions.push(assembly::Instruction::Binary(
-                            assembly::Binop::Nor,
+                        let dst_converted = self.convert_val(dst);
+
+                        instructions.push(assembly::Instruction::Cmp(
                             src_converted.clone(),
-                            src_converted,
-                            self.convert_val(dst),
+                            assembly::Operand::Immediate(0)
                         ));
+
+                        let false_label = self.generate_label("false");
+                        let end_label = self.generate_label("end");
+
+                        instructions.push(assembly::Instruction::JmpCC(assembly::CondCode::Equal, false_label.clone()));
+
+                        instructions.push(assembly::Instruction::Mov(
+                            assembly::Operand::Immediate(0),
+                            dst_converted.clone()
+                        ));
+
+                        instructions.push(assembly::Instruction::Jmp(end_label.clone()));
+
+                        instructions.push(assembly::Instruction::Label(false_label));
+
+                        instructions.push(assembly::Instruction::Mov(
+                            assembly::Operand::Immediate(1),
+                            dst_converted.clone()
+                        ));
+
+                        instructions.push(assembly::Instruction::Label(end_label));
                         return;
                     }
                     definition::Unop::AddImm => {
@@ -414,8 +435,6 @@ impl ConvertPass {
                     return;
                 }
 
-                println!("{:?}", op);
-
                 instructions.push(assembly::Instruction::Binary(
                     self.convert_binop(op),
                     self.convert_val(src1),
@@ -456,7 +475,7 @@ impl ConvertPass {
                 instructions.push(assembly::Instruction::Label(label.clone()));
             },
             definition::Instruction::FunCall(ref name, ref params, ref dst, global) => {
-                let (reg_args, stack_args) = self.classify_parameters(params.clone());
+                let (reg_args, stack_args, _) = self.classify_parameters(params.clone());
 
                 // move the parameters to the registers
                 for (val, reg) in reg_args {
@@ -470,7 +489,7 @@ impl ConvertPass {
                 for (val, offset) in stack_args.into_iter().rev() {
                     instructions.push(assembly::Instruction::Mov(
                         val,
-                        assembly::Operand::Memory(assembly::Register::new("r14".to_string()), offset)
+                        assembly::Operand::Memory(assembly::Register::new("r14".to_string()), offset+1)
                     ));
                 }
 

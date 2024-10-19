@@ -76,6 +76,10 @@ fn parse_args() -> Settings {
                 dont_optimize = true;
             },
             _ => {
+                if arg.starts_with("-") {
+                    // for now, ignore unknown flags
+                    continue;
+                }
                 input_names.push(arg);
             },
         }
@@ -181,7 +185,7 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     let mut parser = parser::Parser::new(lexer)?;
     let program = parser.parse_program()?;
 
-    println!("{:#?}", program);
+    //println!("{:#?}", program);
     
     #[allow(unused_variables)]
     let (program, symbol_table, type_table) = semantic_analysis::resolve(program)?;

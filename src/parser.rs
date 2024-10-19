@@ -346,7 +346,7 @@ impl Parser {
         let types = self.parse_types()?;
 
         if types.is_empty() {
-            return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected type specifier, got {:?}", self.current_token), self.current_token.line));
+            return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected type specifier, got {:?}", self.current_token.token_type), self.current_token.line));
         }
 
         if types[0].token_type == TokenType::Keyword("struct".to_string()) {
@@ -381,6 +381,7 @@ impl Parser {
                         storage_class: class_specifier,
                         ty: type_,
                         line,
+                        has_body: false,
                     }, line));
                 }
         
@@ -391,6 +392,9 @@ impl Parser {
                 while self.current_token.token_type != TokenType::RBrace {
                     let stmt = self.parse_block_item()?;
                     body.push(stmt);
+                    if self.current_token.token_type == TokenType::EOF {
+                        return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected '}}', got EOF"), self.current_token.line));
+                    }
                 }
                 self.next_token()?;
         
@@ -401,6 +405,7 @@ impl Parser {
                     storage_class: class_specifier,
                     ty: type_,
                     line,
+                    has_body: true,
                 }, line));
             }
             _ => (),
@@ -588,14 +593,14 @@ impl Parser {
                     },
                 }
             },
-            _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected type specifier, got {:?}", self.current_token), self.current_token.line)),
+            _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected type specifier, got {:?}", self.current_token.token_type), self.current_token.line)),
         };
 
         self.next_token()?;
 
         let name = match self.current_token.token_type {
             TokenType::Identifier(ref name) => name.clone(),
-            _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected identifier, got {:?}", self.current_token), self.current_token.line)),
+            _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected identifier, got {:?}", self.current_token.token_type), self.current_token.line)),
         };
 
         self.next_token()?;

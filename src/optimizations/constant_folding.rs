@@ -64,8 +64,20 @@ impl ConstantFolding {
 
                     if is_const {
                         let result = match op {
-                            definition::Unop::Negate => -val,
-                            definition::Unop::BitwiseNot => !val,
+                            definition::Unop::Negate => {
+                                // 8-bit two's complement negation
+                                let val = val as i8;
+                                // avoid overflow
+                                if val == -128 {
+                                    128
+                                } else {
+                                    -val as i16
+                                }
+                            }
+                            definition::Unop::BitwiseNot => {
+                                // 8-bit bitwise not
+                                !val
+                            }
                             definition::Unop::LogicalNot => if val == 0 { 1 } else { 0 },
                             definition::Unop::AddImm => val+1,
                         };

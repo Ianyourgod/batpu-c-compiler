@@ -62,7 +62,7 @@ impl Tacky {
                         _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected FnAttr, got {:?}", table_entry.1),
                     };
 
-                    if func.body.len() == 0 {
+                    if !func.has_body {
                         let func = definition::FuncDef {
                             name: func.name.clone(),
                             params,
@@ -79,7 +79,7 @@ impl Tacky {
                         self.emit_block_item(instr, &mut body);
                     }
 
-                    body.push(definition::Instruction::Return(None));
+                    body.push(definition::Instruction::Return(Some(definition::Val::Const(0))));
 
                     let func = definition::FuncDef {
                         name: func.name.clone(),
@@ -117,8 +117,11 @@ impl Tacky {
                         self.handle_initializer(expr, body, &decl.name, &decl.ty, 0, true);
                     }
                     // we don't need to do anything for declarations without an expression
+                } else if let nodes::Declaration::Empty(_) = decl {
+                    // do nothing
+                } else {
+                    unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected VarDecl in BlockItem::Declaration, got {:?}", decl);
                 }
-                // TODO: handle function declarations
             }
         }
     }
@@ -136,9 +139,6 @@ impl Tacky {
             nodes::Initializer::Compound(ref inits, _) => {
                 match ty {
                     definition::Type::Array(inner_ty, _) => {
-                        if name == "localvar.input.40" {
-                            println!("{:#?}", init);
-                        }
                         for init in inits {
                             self.handle_initializer(init, body, name, ty, offset, false);
                             offset += inner_ty.size() as i16;
@@ -198,25 +198,39 @@ impl Tacky {
             nodes::Statement::While(cond, loop_body, label, _) => {
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
+
                 body.push(definition::Instruction::Label(continue_label.clone()));
+
                 let val = self.emit_tacky_and_convert(&cond.expr, body, &cond.ty);
                 body.push(definition::Instruction::JumpIfZero(val, break_label.clone()));
+
                 self.emit_statement(loop_body, body);
+
                 body.push(definition::Instruction::Jump(continue_label.clone()));
+
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
             nodes::Statement::DoWhile(loop_body, cond, label, _) => {
+                let start_label = format!("{}.start", label);
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
-                body.push(definition::Instruction::Label(continue_label.clone()));
+
+                body.push(definition::Instruction::Label(start_label.clone()));
+
                 self.emit_statement(loop_body, body);
+
+                body.push(definition::Instruction::Label(continue_label.clone()));
+
                 let val = self.emit_tacky_and_convert(&cond.expr, body, &cond.ty);
-                body.push(definition::Instruction::JumpIfNotZero(val, continue_label.clone()));
+                body.push(definition::Instruction::JumpIfNotZero(val, start_label.clone()));
+
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
             nodes::Statement::For(init, cond, post, loop_body, label, _) => {
                 let continue_label = format!("{}.continue", label);
                 let break_label = format!("{}.break", label);
+                let loop_start_label = self.make_temporary();
+
                 match init {
                     nodes::ForInit::Declaration(ref decl, _) => {
                         let decl = match decl {
@@ -234,18 +248,26 @@ impl Tacky {
                     }
                     nodes::ForInit::Empty(_) => {}
                 }
-                body.push(definition::Instruction::Label(continue_label.clone()));
+
+                body.push(definition::Instruction::Label(loop_start_label.clone()));
+
                 if cond.is_some() {
                     let cond = cond.as_ref().unwrap();
                     let val = self.emit_tacky_and_convert(&cond.expr, body, &cond.ty);
                     body.push(definition::Instruction::JumpIfZero(val, break_label.clone()));
                 }
+
                 self.emit_statement(loop_body, body);
+
+                body.push(definition::Instruction::Label(continue_label.clone()));
+
                 if post.is_some() {
                     let post = post.as_ref().unwrap();
                     self.emit_tacky_and_convert(&post.expr, body, &post.ty);
                 }
-                body.push(definition::Instruction::Jump(continue_label.clone()));
+
+                body.push(definition::Instruction::Jump(loop_start_label.clone()));
+
                 body.push(definition::Instruction::Label(break_label.clone()));
             }
             nodes::Statement::Empty(_) => {}

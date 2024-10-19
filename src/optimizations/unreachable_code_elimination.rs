@@ -66,14 +66,11 @@ impl UnreachableCodeElimination {
             if successor == &cfg::NodeID::EXIT {
                 continue;
             }
-            if possible_blocks.contains(successor) || found.contains(&successor) {
-                continue;
+            if !possible_blocks.contains(successor) {
+                possible_blocks.push(successor.clone());
+                possible_blocks = self.get_possible_visited_blocks(successor, &possible_blocks);
             }
-            let mut found_with_possible = possible_blocks.clone();
-            found_with_possible.push(successor.clone());
-            possible_blocks.extend(self.get_possible_visited_blocks(successor, &found_with_possible));
         }
-        possible_blocks.extend(successors.clone());
 
         possible_blocks
     }

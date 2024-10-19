@@ -200,6 +200,7 @@ impl VariableResolution {
             storage_class: decl.storage_class.clone(),
             ty,
             line: decl.line,
+            has_body: decl.has_body,
         })
     }
 

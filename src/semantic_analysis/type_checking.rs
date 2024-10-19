@@ -32,7 +32,6 @@ impl TypeChecker {
     }
 
     fn typecheck_function_declaration(&mut self, decl: &nodes::FuncDecl) -> Result<nodes::Declaration, errors::Error> {
-        let has_body = decl.body.len() > 0;
         let mut already_defined = false;
 
         let ident = &decl.name;
@@ -59,7 +58,7 @@ impl TypeChecker {
                 ));
             }
             already_defined = old_decl.1.0;
-            if already_defined && has_body {
+            if already_defined && decl.has_body {
                 return Err(errors::Error::new(
                     errors::ErrorType::Error,
                     format!("Function {} already defined", decl.name),
@@ -79,7 +78,7 @@ impl TypeChecker {
 
         self.validate_type_specifier(&decl.ty)?;
 
-        let attrs = nodes::TableEntry::FnAttr(already_defined || has_body, global);
+        let attrs = nodes::TableEntry::FnAttr(already_defined || decl.has_body, global);
 
         self.symbol_table.insert(ident.clone(), (decl.ty.clone(), attrs));
 
@@ -120,7 +119,7 @@ impl TypeChecker {
             self.symbol_table.insert(param.clone(), (param_type.clone(), nodes::TableEntry::LocalAttr));
         }
 
-        let body = if has_body {
+        let body = if decl.has_body {
             let body = match self.typecheck_block(&decl.body, &ret_type, decl.line)? {
                 nodes::Statement::Compound(body, _) => body,
                 _ => unreachable!()
@@ -139,6 +138,7 @@ impl TypeChecker {
             storage_class: decl.storage_class.clone(),
             ty: decl.ty.clone(),
             line: decl.line,
+            has_body: decl.has_body,
         }, decl.line))
     }
 
@@ -1237,7 +1237,10 @@ impl TypeChecker {
             BlockItem::Declaration(decl, _) => {
                 BlockItem::Declaration(match decl {
                     nodes::Declaration::Empty(line) => nodes::Declaration::Empty(*line),
-                    nodes::Declaration::FuncDecl(fn_decl, _) => self.typecheck_function_declaration(fn_decl)?,
+                    nodes::Declaration::FuncDecl(fn_decl, line) => {
+                        self.typecheck_function_declaration(fn_decl)?;
+                        nodes::Declaration::Empty(*line)
+                    },
                     nodes::Declaration::VarDecl(var_decl, _) => self.typecheck_variable_declaration(var_decl)?,
                     nodes::Declaration::StructDecl(struct_decl, _) => self.typecheck_struct_declaration(struct_decl)?,
                 }, stmt.line())

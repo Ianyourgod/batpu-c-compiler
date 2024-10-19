@@ -20,7 +20,7 @@ impl Emitter {
         for tl in &self.program.statements {
             match tl {
                 assembly::TopLevel::FuncDef(ref func) => {
-                    if func.name == name {
+                    if func.name == name && func.defined {
                         return (true, func.global);
                     }
                 },
@@ -99,6 +99,7 @@ sub r1 r2 r1
 inc r3
 jmp .__div..loop1
 .__div..end
+mov r1 r2
 mov r3 r1
 ret"
 } else { "" },
@@ -286,7 +287,7 @@ adi r2 -1
                     // we add the difference to the offset
                     res.push_str(&format!("adi {} {}\n    ", src, diff));
                 }
-                res.push_str(&format!("lod {} {} {}", src, self.emit_as_register(dst), -i - diff*out_of_bounds as i16));
+                res.push_str(&format!("lod {} {} {}", src, self.emit_as_register(dst), -i + diff*out_of_bounds as i16));
                 if out_of_bounds { res.push_str(&format!("\n    adi {} {}", src, -diff)) }
                 res
             }
@@ -300,7 +301,7 @@ adi r2 -1
                     // we add the difference to the offset
                     res.push_str(&format!("adi {} {}\n    ", dst, diff));
                 }
-                res.push_str(&format!("str {} {} {}", dst, self.emit_as_register(src), -i - diff*out_of_bounds as i16));
+                res.push_str(&format!("str {} {} {}", dst, self.emit_as_register(src), -i + diff*out_of_bounds as i16));
                 if out_of_bounds { res.push_str(&format!("\n    adi {} {}", dst, -diff)) }
                 res
             }
