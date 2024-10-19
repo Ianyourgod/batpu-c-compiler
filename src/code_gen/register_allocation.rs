@@ -61,7 +61,8 @@ pub fn allocate_registers(mut instructions: assembly::FuncDecl, function_table: 
         body: transformed_instructions,
         stack_size: instructions.stack_size,
         global: instructions.global,
-        defined: true
+        defined: true,
+        line: instructions.line,
     }, callee_saved)
 }
 

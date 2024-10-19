@@ -30,7 +30,8 @@ pub fn optimize(program: definition::Program) -> (definition::Program, HashMap<S
                     body: optimized_func_body,
                     params: func.params,
                     global: func.global,
-                    defined: func.defined
+                    defined: func.defined,
+                    line: func.line,
                 }));
 
                 aliased_vars.insert(func.name, aliased);

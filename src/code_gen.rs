@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use crate::parser::nodes::{SymbolTable, TypeTable};
 use crate::tacky::definition;
 
-pub fn convert(program: definition::Program, type_table: SymbolTable, struct_table: TypeTable, aliased: HashMap<String, Vec<String>>, optimize: bool) -> assembly::Program {
+pub fn convert(program: definition::Program, type_table: SymbolTable, struct_table: TypeTable, aliased: HashMap<String, Vec<String>>, optimize: bool, source: (&String, &String)) -> assembly::Program {
     let mut convert_pass = convert::ConvertPass::new(program);
 
     #[allow(unused_variables)]
@@ -31,7 +31,7 @@ pub fn convert(program: definition::Program, type_table: SymbolTable, struct_tab
     //println!("{:#?}", pseudo_program);
 
     let mut instr_fixup_pass = instr_fixup::InstructionFixupPass::new(pseudo_program, callee_saved);
-    let fixup_program = instr_fixup_pass.generate();
+    let fixup_program = instr_fixup_pass.generate(source);
 
     //println!("{:#?}", fixup_program);
 

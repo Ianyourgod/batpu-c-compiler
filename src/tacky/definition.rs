@@ -18,6 +18,7 @@ pub struct FuncDef {
     pub body: Vec<Instruction>,
     pub global: bool,
     pub defined: bool,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]

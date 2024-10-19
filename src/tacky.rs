@@ -69,6 +69,7 @@ impl Tacky {
                             body,
                             global,
                             defined: false,
+                            line: func.line,
                         };
     
                         statements.push(definition::TopLevel::FuncDef(func));
@@ -87,6 +88,7 @@ impl Tacky {
                         body,
                         global,
                         defined: true,
+                        line: func.line,
                     };
 
                     statements.push(definition::TopLevel::FuncDef(func));

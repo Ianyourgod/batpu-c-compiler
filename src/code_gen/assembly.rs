@@ -18,6 +18,7 @@ pub struct FuncDecl {
     pub stack_size: i16,
     pub global: bool,
     pub defined: bool,
+    pub line: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -181,12 +181,14 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     // read preprocessed file
     let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_file_for_tmp)).expect("Failed to read file");
 
+    let source = (&format!(".tmpcb/{}.i", input_file_for_tmp), &input.clone());
+
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer)?;
     let program = parser.parse_program()?;
 
     //println!("{:#?}", program);
-    
+
     #[allow(unused_variables)]
     let (program, symbol_table, type_table) = semantic_analysis::resolve(program)?;
 
@@ -204,7 +206,7 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
 
     //println!("{:#?}", program);
 
-    let assembly = code_gen::convert(program, symbol_table, type_table, aliased_vars, !args.dont_optimize);
+    let assembly = code_gen::convert(program, symbol_table, type_table, aliased_vars, !args.dont_optimize, source);
 
     //println!("{:#?}", assembly);
 

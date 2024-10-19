@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::code_gen::assembly;
+use crate::{code_gen::assembly, errors};
 
 pub struct InstructionFixupPass {
     program: assembly::Program,
@@ -21,7 +21,7 @@ impl InstructionFixupPass {
         }
     }
 
-    pub fn generate(&mut self) -> assembly::Program {
+    pub fn generate(&mut self, source: (&String, &String)) -> assembly::Program {
         let mut assembly = assembly::Program {
             statements: Vec::new(),
         };
@@ -39,14 +39,22 @@ impl InstructionFixupPass {
                 vec![]
             } else { self.callee_saved.get(&stmt.name).unwrap().clone() };
 
-            self.generate_function(&stmt, &mut assembly, &callee_saved);
+            self.generate_function(&stmt, &mut assembly, &callee_saved, source);
         }
 
         assembly
     }
 
-    fn generate_function(&mut self, func: &assembly::FuncDecl, program: &mut assembly::Program, callee_saved: &Vec<assembly::Register>) {
+    fn generate_function(&mut self, func: &assembly::FuncDecl, program: &mut assembly::Program, callee_saved: &Vec<assembly::Register>, source: (&String, &String)) {
         let mut instrs: Vec<assembly::Instruction> = Vec::with_capacity(func.body.len());
+
+        if func.stack_size > 239 {
+            let line = source.1.lines().nth(func.line-1).unwrap();
+
+            // TODO: go through function body, find calls, do recursive shit to find the max stack size
+
+            errors::inline_warn((func.line, 0), "Stack size is too large. Maximum stack size is 239 bytes.", line, source.0);
+        }
 
         instrs.push(assembly::Instruction::AllocateStack(func.stack_size as u8));
 
@@ -87,6 +95,7 @@ impl InstructionFixupPass {
             stack_size: func.stack_size,
             global: func.global,
             defined: func.defined,
+            line: func.line,
         };
 
         program.statements.push(assembly::TopLevel::FuncDef(func));
