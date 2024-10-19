@@ -181,7 +181,7 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     // read preprocessed file
     let input = std::fs::read_to_string(format!(".tmpcb/{}.i", input_file_for_tmp)).expect("Failed to read file");
 
-    let source = (&format!(".tmpcb/{}.i", input_file_for_tmp), &input.clone());
+    let source = (&input_file_for_tmp, &input.clone());
 
     let lexer = lexer::Lexer::new(input);
     let mut parser = parser::Parser::new(lexer)?;
