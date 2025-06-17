@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 pub mod nodes;
-use crate::lexer::{Lexer, TokenType, Token};
+use crate::lexer::{Lexer, TokenType, Token, Keyword};
 use super::errors;
 
 pub struct Parser {
@@ -87,14 +87,13 @@ impl Parser {
                 unknown => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", unknown), specifier_tok.line)),
             };
 
-            match specifier.as_str() {
-                "int" => types.push(nodes::Type::Int),
-                "char" => types.push(nodes::Type::Char),
-                "void" => types.push(nodes::Type::Void),
-                "extern" => storage_classes.push(nodes::StorageClass::Extern),
-                "static" => storage_classes.push(nodes::StorageClass::Static),
-
-                "struct" => {
+            match specifier {
+                Keyword::Int => types.push(nodes::Type::Int),
+                Keyword::Char => types.push(nodes::Type::Char),
+                Keyword::Void => types.push(nodes::Type::Void),
+                Keyword::Extern => storage_classes.push(nodes::StorageClass::Extern),
+                Keyword::Static => storage_classes.push(nodes::StorageClass::Static),
+                Keyword::Struct => {
                     let name = match specifiers[i].token_type {
                         TokenType::Identifier(ref name) => name.clone(),
                         _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected identifier, got {:?}", specifiers[i]), specifiers[i].line)),
@@ -102,13 +101,14 @@ impl Parser {
                     i += 1;
                     types.push(nodes::Type::Struct(name));
                 }
-                kwd => {
-                    if let Some(ty) = self.lexer.get_type_def(kwd) {
+                Keyword::TDName(name) => {
+                    if let Some(ty) = self.lexer.get_type_def(name) {
                         types.push(ty.clone());
                     } else {
-                        return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", kwd), specifier_tok.line));
+                        unreachable!()
                     }
                 },
+                kwd => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", kwd), specifier_tok.line)),
             }
         };
 
@@ -130,21 +130,16 @@ impl Parser {
     fn is_valid_var_starter(&self, token: &TokenType) -> bool {
         match token {
             TokenType::Keyword(kwd) => {
-                match kwd.as_str() {
-                    "int"  |
-                    "char" |
-                    "void" |
-                    "extern" |
-                    "static" |
-                    "typedef" | // for the shittery :)
-                    "struct" => true,
-                    _ => {
-                        if let Some(_) = self.lexer.get_type_def(kwd) {
-                            true
-                        } else {
-                            false
-                        }
-                    }
+                match kwd {
+                    Keyword::Int  |
+                    Keyword::Char |
+                    Keyword::Void |
+                    Keyword::Extern |
+                    Keyword::Static |
+                    Keyword::Typedef | // for the shittery :)
+                    Keyword::TDName(_) |
+                    Keyword::Struct => true,
+                    _ => false,
                 }
             },
             _ => false,
@@ -184,7 +179,7 @@ impl Parser {
 
         if self.current_token.token_type == TokenType::LParen {
             self.next_token()?;
-            if self.current_token.token_type == TokenType::Keyword("void".to_string()) && self.lexer.peek_token()?.token_type == TokenType::RParen {
+            if self.current_token.token_type == TokenType::Keyword(Keyword::Void) && self.lexer.peek_token()?.token_type == TokenType::RParen {
                 self.next_token()?;
                 self.consume(TokenType::RParen)?;
                 return Ok(Declarator::Function(Vec::new(), Box::new(inner)));
@@ -250,7 +245,7 @@ impl Parser {
         let mut types = Vec::new();
 
         while self.is_valid_var_starter(&self.current_token.token_type) {
-            if self.current_token.token_type == TokenType::Keyword("struct".to_string()) {
+            if self.current_token.token_type == TokenType::Keyword(Keyword::Struct) {
                 let cur_tok = self.current_token.clone();
                 self.next_token()?;
                 match self.current_token.token_type {
@@ -334,13 +329,11 @@ impl Parser {
     fn parse_declaration(&mut self) -> Result<nodes::Declaration, errors::Error> {
         let line = self.current_token.line;
 
-        if let TokenType::Keyword(ref kwd) = self.current_token.token_type {
-            if kwd == "typedef" {
-                return Ok(match self.parse_typedef()? {
-                    Some(decl) => decl,
-                    None => nodes::Declaration::Empty(self.current_token.line),
-                });
-            }
+        if let TokenType::Keyword(Keyword::Typedef) = self.current_token.token_type {
+            return Ok(match self.parse_typedef()? {
+                Some(decl) => decl,
+                None => nodes::Declaration::Empty(self.current_token.line),
+            });
         }
         
         let types = self.parse_types()?;
@@ -349,7 +342,7 @@ impl Parser {
             return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected type specifier, got {:?}", self.current_token.token_type), self.current_token.line));
         }
 
-        if types[0].token_type == TokenType::Keyword("struct".to_string()) {
+        if types[0].token_type == TokenType::Keyword(Keyword::Struct) {
             let (tag, t1_is_ident) = match types.get(1) {
                 Some(Token { token_type: TokenType::Identifier(tag), line: _ }) => (tag.clone(), true),
                 _ => (String::new(), false),
@@ -500,23 +493,23 @@ impl Parser {
         let line = self.current_token.line;
         Ok(match self.current_token.token_type {
             TokenType::Keyword(ref keyword) => {
-                match keyword.as_str() {
-                    "return" => self.parse_return_statement()?,
-                    "if" => self.parse_if_statement()?,
-                    "while" => self.parse_while_statement()?,
-                    "do" => self.parse_do_while()?,
-                    "for" => self.parse_for_loop()?,
-                    "break" => {
+                match keyword {
+                    Keyword::Return => self.parse_return_statement()?,
+                    Keyword::If => self.parse_if_statement()?,
+                    Keyword::While => self.parse_while_statement()?,
+                    Keyword::Do => self.parse_do_while()?,
+                    Keyword::For => self.parse_for_loop()?,
+                    Keyword::Break => {
                         self.next_token()?;
                         self.consume(TokenType::Semicolon)?;
                         nodes::Statement::Break("".to_string(), line)
                     },
-                    "continue" => {
+                    Keyword::Continue => {
                         self.next_token()?;
                         self.consume(TokenType::Semicolon)?;
                         nodes::Statement::Continue("".to_string(), line)
                     },
-                    "sizeof" => {
+                    Keyword::Sizeof => {
                         nodes::Statement::Expression(self.parse_expression(0)?, line)
                     },
                     _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid keyword {:?}", keyword), self.current_token.line)),
@@ -554,15 +547,15 @@ impl Parser {
 
         let (ty, decl) = match self.current_token.token_type {
             TokenType::Keyword(ref kwd) => {
-                match kwd.as_str() {
-                    "int" => (nodes::Type::Int, None),
-                    "char" => (nodes::Type::Char, None),
-                    "void" => (nodes::Type::Void, None),
+                match kwd {
+                    Keyword::Int => (nodes::Type::Int, None),
+                    Keyword::Char => (nodes::Type::Char, None),
+                    Keyword::Void => (nodes::Type::Void, None),
 
-                    "extern" |
-                    "static" => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", kwd), self.current_token.line)),
+                    Keyword::Extern |
+                    Keyword::Static => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", kwd), self.current_token.line)),
     
-                    "struct" => {
+                    Keyword::Struct => {
                         self.next_token()?;
 
                         if self.current_token.token_type == TokenType::LBrace {
@@ -584,13 +577,14 @@ impl Parser {
                             (nodes::Type::Struct(name), str_decl)
                         }
                     }
-                    ref kwd => {
-                        if let Some(ty) = self.lexer.get_type_def(kwd) {
+                    Keyword::TDName(name) => {
+                        if let Some(ty) = self.lexer.get_type_def(&name) {
                             (ty.clone(), None)
                         } else {
                             return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", kwd), self.current_token.line));
                         }
                     },
+                    kwd => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid type specifier {:?}", kwd), self.current_token.line)),
                 }
             },
             _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Expected type specifier, got {:?}", self.current_token.token_type), self.current_token.line)),
@@ -624,7 +618,7 @@ impl Parser {
 
         let then = self.parse_statement()?;
 
-        let else_ = if self.current_token.token_type == TokenType::Keyword("else".to_string()) {
+        let else_ = if self.current_token.token_type == TokenType::Keyword(Keyword::Else) {
             self.next_token()?;
 
             Some(self.parse_statement()?)
@@ -656,7 +650,7 @@ impl Parser {
 
         let stmt = self.parse_statement()?;
 
-        self.consume(TokenType::Keyword("while".to_string()))?;
+        self.consume(TokenType::Keyword(Keyword::While))?;
         self.consume(TokenType::LParen)?;
 
         let cond = self.parse_expression(0)?;
@@ -953,7 +947,7 @@ impl Parser {
                 nodes::Expression::new(nodes::ExpressionEnum::StringLiteral(s, line), line)
             }
             TokenType::Keyword(kwd) => {
-                if kwd == "sizeof" {
+                if kwd == Keyword::Sizeof {
                     self.next_token()?;
                     let peek_token = self.lexer.peek_token()?.token_type;
                     if self.current_token.token_type == TokenType::LParen && self.is_valid_var_starter(&peek_token) {

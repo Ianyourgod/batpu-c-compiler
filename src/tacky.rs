@@ -1,21 +1,25 @@
 pub mod definition;
 
+use std::collections::HashSet;
+
 use crate::parser::nodes;
 
-pub struct Tacky {
+pub struct Tacky<'a> {
     program: nodes::Program,
     temp_count: i32,
-    symbol_table: nodes::SymbolTable,
-    type_table: nodes::TypeTable,
+    symbol_table: &'a nodes::SymbolTable,
+    type_table: &'a nodes::TypeTable,
+    used_functions: HashSet<String>,
 }
 
-impl Tacky {
-    pub fn new(program: nodes::Program, symbol_table: nodes::SymbolTable, type_table: nodes::TypeTable) -> Tacky {
+impl<'a> Tacky<'a> {
+    pub fn new(program: nodes::Program, symbol_table: &'a nodes::SymbolTable, type_table: &'a nodes::TypeTable, used_functions: HashSet<String>) -> Tacky<'a> {
         Tacky {
             program,
             temp_count: 0,
             symbol_table,
             type_table,
+            used_functions
         }
     }
 
@@ -48,6 +52,10 @@ impl Tacky {
                     ));
                 }
                 nodes::Declaration::FuncDecl(func, _) => {
+                    if !self.used_functions.contains(&func.name) && func.name.as_str() != "main" {
+                        continue;
+                    }
+
                     let mut body: Vec<definition::Instruction> = Vec::new();
                     let mut params: Vec<(String, definition::Type)> = Vec::with_capacity(func.params.len());
                     

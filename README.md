@@ -38,15 +38,15 @@ You may also choose not to build. Compiling will be slightly slower, but not tha
 
 To compile a C file when you've built, run the following command:
 
-```sh
+```bash
 <compiler executible> <input_file> -o <output_file>
 ```
 
-Compiler executible could be `target/release/bcc` if you built it yourself, or `c-compiler` if you're using the prebuilt binary.
+Compiler executible could be `target/release/bcc` if you built it yourself, or `x86-{platform}-bcc` if you're using the prebuilt binary.
 
 To compile a C file without building, run the following command:
 
-```sh
+```bash
 cargo run <input_file> -o <output_file>
 ```
 
@@ -70,4 +70,3 @@ If you would like to request a feature, please open an issue with the `feature-r
 - [BatPU Emulator](https://github.com/AdoHTQ/Batpu2-VM) by AdoHTQ
 - [Writing a C Compiler](https://norasandler.com/2024/08/20/The-Book-Is-Here.html) by Nora Sandler
 - [Rust](https://www.rust-lang.org/)
-- [Me](https://github.com/ianyourgod)

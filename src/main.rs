@@ -190,11 +190,11 @@ fn compile(input_file: &String, args: Settings) -> Result<String, errors::Error>
     //println!("{:#?}", program);
 
     #[allow(unused_variables)]
-    let (program, symbol_table, type_table) = semantic_analysis::resolve(program)?;
+    let (program, symbol_table, type_table, used_functions) = semantic_analysis::resolve(program)?;
 
     //println!("{:#?}", program);
 
-    let mut tacky = tacky::Tacky::new(program, symbol_table.clone(), type_table.clone());
+    let mut tacky = tacky::Tacky::new(program, &symbol_table, &type_table, used_functions);
     let program = tacky.emit();
     let aliased_vars = HashMap::new();
 

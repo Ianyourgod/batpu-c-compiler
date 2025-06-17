@@ -48,6 +48,86 @@ int tileAtRight(int* map, int* shifts, int pX, int pY) {
 			tileAtPix(map, shifts, pX + 4, pY + 8);
 }
 
+void drawBox(int x, int y) {
+	drawPixelXY(x,     y    );
+	drawPixelXY(x + 1, y    );
+	drawPixelXY(x + 2, y    );
+	drawPixelXY(x + 3, y    );
+	
+	drawPixelXY(x,     y + 3);
+	drawPixelXY(x + 1, y + 3);
+	drawPixelXY(x + 2, y + 3);
+	drawPixelXY(x + 3, y + 3);
+	
+	drawPixelXY(x,     y + 1);
+	drawPixelXY(x,     y + 2);
+	
+	drawPixelXY(x + 3, y + 1);
+	drawPixelXY(x + 3, y + 2);
+}
+
+void drawPlayer(int x, int y) {
+	drawPixelXY(x,     y    );
+	clearPixelXY(x + 1,  y    );
+	clearPixelXY(x + 2,  y    );
+	drawPixelXY(x + 3,  y    );
+	
+	clearPixelXY(x,     y + 1);
+	drawPixelXY(x + 1,  y + 1);
+	drawPixelXY(x + 2,  y + 1);
+	clearPixelXY(x + 3,  y + 1);
+	
+	clearPixelXY(x,     y + 2);
+	drawPixelXY(x + 1,  y + 2);
+	drawPixelXY(x + 2,  y + 2);
+	clearPixelXY(x + 3,  y + 2);
+	
+	drawPixelXY(x,     y + 3);
+	drawPixelXY(x + 1,  y + 3);
+	drawPixelXY(x + 2,  y + 3);
+	drawPixelXY(x + 3,  y + 3);
+	
+	clearPixelXY(x,     y + 4);
+	drawPixelXY(x + 1,  y + 4);
+	drawPixelXY(x + 2,  y + 4);
+	clearPixelXY(x + 3,  y + 4);
+	
+	drawPixelXY(x,     y + 5);
+	clearPixelXY(x + 1,  y + 5);
+	clearPixelXY(x + 2,  y + 5);
+	drawPixelXY(x + 3,  y + 5);
+	
+	drawPixelXY(x,     y + 6);
+	clearPixelXY(x + 1,  y + 6);
+	clearPixelXY(x + 2,  y + 6);
+	drawPixelXY(x + 3,  y + 6);
+	
+	clearPixelXY(x,     y + 7);
+	drawPixelXY(x + 1,  y + 7);
+	drawPixelXY(x + 2,  y + 7);
+	clearPixelXY(x + 3,  y + 7);
+}
+
+void render(int* map, int* shifts, int pX, int pY) {
+	clearBuffer();
+	
+	int pixelX = 0;
+	for (int x = 0; x < 8; x += 1) {
+		int pixelY = 0;
+		for (int y = 0; y < 8; y += 1) {
+			if (getTile(map, shifts, x, y))
+				drawBox(pixelX, pixelY);
+			
+			pixelY += 4;
+		}
+		pixelX += 4;
+	}
+	
+	drawPlayer(pX, pY);
+
+	pushBuffer();
+}
+
 void main() {
 	int shifts[8];
 	shifts[0] = 128;
@@ -95,7 +175,7 @@ void main() {
 		
 		if ((input & 1) && !tileAtLeft(map, shifts, pX, pY))
 			pX -= 1;
-		
+
 		if (grounded && (input & 16) && !tileAtTop(map, shifts, pX, pY)) {
 			pVY = 128 + 3;
 			grounded = 0;
@@ -112,5 +192,11 @@ void main() {
 				grounded = 1;
 			}
 		}
+		
+		render(map, shifts, pX, pY);
 	}
+}
+
+void goof_around(int h) {
+	
 }

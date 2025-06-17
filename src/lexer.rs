@@ -18,7 +18,7 @@ macro_rules! after_char {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
-    Keyword(String),
+    Keyword(Keyword),
     // Symbols
     LParen,
     RParen,
@@ -75,6 +75,51 @@ pub enum TokenType {
     StringLiteral(String),
     // End of file
     EOF,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Keyword {
+    Int,
+    Void,
+    Char,
+    Static,
+    Extern,
+    Struct,
+    Return,
+    If,
+    Else,
+    While,
+    For,
+    Do,
+    Break,
+    Continue,
+    Sizeof,
+    Typedef,
+    TDName(String),
+}
+
+impl Keyword {
+    pub fn from_str(s: &str) -> Option<Keyword> {
+        match s {
+            "int" => Some(Keyword::Int),
+            "void" => Some(Keyword::Void),
+            "char" => Some(Keyword::Char),
+            "static" => Some(Keyword::Static),
+            "extern" => Some(Keyword::Extern),
+            "struct" => Some(Keyword::Struct),
+            "return" => Some(Keyword::Return),
+            "if" => Some(Keyword::If),
+            "else" => Some(Keyword::Else),
+            "while" => Some(Keyword::While),
+            "for" => Some(Keyword::For),
+            "do" => Some(Keyword::Do),
+            "break" => Some(Keyword::Break),
+            "continue" => Some(Keyword::Continue),
+            "sizeof" => Some(Keyword::Sizeof),
+            "typedef" => Some(Keyword::Typedef),
+            _ => None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -244,28 +289,17 @@ impl Lexer {
                 if is_letter(self.ch) {
                     let ident = self.read_identifier();
 
-                    let keywords = [
-                        "int", "void", "char",
-                        "static", "extern",
-                        "struct",
-                        "return",
-                        "if", "else",
-                        "while", "for", "do", "break", "continue",
-                        "sizeof",
-                        "typedef",
-                    ];
-
                     if self.get_type_def(&ident).is_some() {
                         return Ok(Token {
-                            token_type: TokenType::Keyword(ident),
+                            token_type: TokenType::Keyword(Keyword::TDName(ident)),
                             line: cur_line,
                         });
                     }
 
-                    if keywords.contains(&ident.as_str()) {
+                    if let Some(kwd) = Keyword::from_str(&ident) {
                         return Ok(Token {
-                            token_type: TokenType::Keyword(ident),
-                            line: cur_line,
+                            token_type: TokenType::Keyword(kwd),
+                            line: cur_line
                         });
                     }
 

@@ -58,26 +58,43 @@ impl Emitter {
         let uses_div = self.uses_function_named("__div");
         let uses_malloc = self.uses_function_named("malloc");
         let uses_free = self.uses_function_named("free");
+        let uses_mem_read = self.uses_function_named("mem_read");
+        let uses_mem_write = self.uses_function_named("mem_write");
+        let uses_exit = self.uses_function_named("exit");
         let mut output = format!("
 ldi r14 239
 ldi r15 239
 {}{}
-cal .exit
-.mem_read
-  lod r1 r1 0
-  ret
-.mem_write
-  str r1 r2 0
-  ret
-.exit
-  ldi r2 250
-  str r2 r1 0
-  hlt
+{}
+{}
+{}
+{}
 {}
 {}
 {}
 {}
 ", if contains_main { "cal .main" } else { "" }, if main_global && self.include_directives { ":global" } else { "" },
+if uses_exit { "cal .exit" } else {
+"ldi r2 250
+str r2 r1 0
+hlt
+" },
+if uses_mem_read {
+".mem_read
+  lod r1 r1
+  ret
+" } else { "" },
+if uses_mem_write {
+".mem_write
+  str r1 r2
+  ret
+"} else { "" },
+if uses_exit {
+".exit
+  ldi r2 250
+  str r2 r1 0
+  hlt
+"} else { "" },
 if uses_mult {
 ".__mult
   LDI r3 0

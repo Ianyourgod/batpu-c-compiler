@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{errors, parser::nodes::{self, BlockItem}};
 
 pub struct TypeChecker {
@@ -15,12 +17,13 @@ impl TypeChecker {
         }
     }
 
-    pub fn resolve(&mut self) -> Result<(nodes::Program, nodes::SymbolTable, nodes::TypeTable), errors::Error> {
+    pub fn resolve(mut self) -> Result<(nodes::Program, nodes::SymbolTable, nodes::TypeTable, HashSet<String>), errors::Error> {
         let mut statements: Vec<nodes::Declaration> = Vec::with_capacity(self.program.statements.len());
+        let mut used_functions = HashSet::new();
         for decl in self.program.statements.clone() {
             statements.push(match decl {
-                nodes::Declaration::VarDecl(var_decl, line) => nodes::Declaration::VarDecl(self.typecheck_file_scope_variable_declaration(&var_decl)?, line),
-                nodes::Declaration::FuncDecl(func, _) => self.typecheck_function_declaration(&func)?,
+                nodes::Declaration::VarDecl(var_decl, line) => nodes::Declaration::VarDecl(self.typecheck_file_scope_variable_declaration(&var_decl, &mut used_functions)?, line),
+                nodes::Declaration::FuncDecl(func, _) => self.typecheck_function_declaration(&func, &mut used_functions)?,
                 nodes::Declaration::StructDecl(struct_decl, _) => self.typecheck_struct_declaration(&struct_decl)?,
                 nodes::Declaration::Empty(line) => nodes::Declaration::Empty(line),
             });
@@ -28,10 +31,10 @@ impl TypeChecker {
 
         Ok((nodes::Program {
             statements,
-        }, self.symbol_table.clone(), self.type_table.clone()))
+        }, self.symbol_table, self.type_table, used_functions))
     }
 
-    fn typecheck_function_declaration(&mut self, decl: &nodes::FuncDecl) -> Result<nodes::Declaration, errors::Error> {
+    fn typecheck_function_declaration(&mut self, decl: &nodes::FuncDecl, used_functions: &mut HashSet<String>) -> Result<nodes::Declaration, errors::Error> {
         let mut already_defined = false;
 
         let ident = &decl.name;
@@ -120,7 +123,7 @@ impl TypeChecker {
         }
 
         let body = if decl.has_body {
-            let body = match self.typecheck_block(&decl.body, &ret_type, decl.line)? {
+            let body = match self.typecheck_block(&decl.body, &ret_type, decl.line, used_functions)? {
                 nodes::Statement::Compound(body, _) => body,
                 _ => unreachable!()
             };
@@ -189,10 +192,10 @@ impl TypeChecker {
         })
     }
 
-    fn typecheck_initializer(&self, init: &nodes::Initializer, ty: &nodes::Type) -> Result<nodes::Initializer, errors::Error> {
+    fn typecheck_initializer(&self, init: &nodes::Initializer, ty: &nodes::Type, used_functions: &mut HashSet<String>) -> Result<nodes::Initializer, errors::Error> {
         Ok(match init {
             nodes::Initializer::Single(expr, line) => {
-                let expr = self.typecheck_and_convert(expr)?;
+                let expr = self.typecheck_and_convert(expr, used_functions)?;
                 let expr = self.convert_by_assignment(&expr, ty)?;
 
                 nodes::Initializer::Single(expr, *line)
@@ -205,7 +208,7 @@ impl TypeChecker {
                         let (ty, size) = (*ty.clone(), *size);
                         let mut count = 0;
                         for expr in exprs {
-                            new_exprs.push(self.typecheck_initializer(expr, &ty)?);
+                            new_exprs.push(self.typecheck_initializer(expr, &ty, used_functions)?);
                             count += 1;
                         }
 
@@ -249,7 +252,7 @@ impl TypeChecker {
                         let mut typechecked_list = Vec::with_capacity(struct_def.1.len());
                         for init_elem in exprs {
                             let elem_ty = &struct_def.1[i].ty;
-                            let init_elem = self.typecheck_initializer(init_elem, elem_ty)?;
+                            let init_elem = self.typecheck_initializer(init_elem, elem_ty, used_functions)?;
                             typechecked_list.push(init_elem);
                             i += 1;
                         }
@@ -270,7 +273,7 @@ impl TypeChecker {
         })
     }
 
-    fn typecheck_file_scope_variable_declaration(&mut self, decl: &nodes::VarDecl) -> Result<nodes::VarDecl, errors::Error> {
+    fn typecheck_file_scope_variable_declaration(&mut self, decl: &nodes::VarDecl, used_functions: &mut HashSet<String>) -> Result<nodes::VarDecl, errors::Error> {
         let mut initial_value = if decl.expr.is_none() {
             if decl.storage_class == nodes::StorageClass::Extern {
                 nodes::InitialValue::NoInit
@@ -285,7 +288,7 @@ impl TypeChecker {
                 decl.line,
             ));
         } else if let nodes::Initializer::Single(expr, _) = decl.expr.as_ref().unwrap() {
-            let expr = self.typecheck_and_convert(expr)?;
+            let expr = self.typecheck_and_convert(expr, used_functions)?;
             if let nodes::ExpressionEnum::IntegerLiteral(i, _) = expr.expr {
                 nodes::InitialValue::Initial(i as i32)
             } else {
@@ -362,7 +365,7 @@ impl TypeChecker {
         })
     }
 
-    fn typecheck_statement(&mut self, stmt: &nodes::Statement, ret_type: &nodes::Type) -> Result<nodes::Statement, errors::Error> {
+    fn typecheck_statement(&mut self, stmt: &nodes::Statement, ret_type: &nodes::Type, used_functions: &mut HashSet<String>) -> Result<nodes::Statement, errors::Error> {
         Ok(match stmt {
             nodes::Statement::Break(_, _) | nodes::Statement::Continue(_, _) |
             nodes::Statement::Empty(_) => stmt.clone(),
@@ -387,19 +390,19 @@ impl TypeChecker {
 
                 let expr = expr.as_ref().unwrap();
 
-                let ret_expr = self.typecheck_and_convert(expr)?;
+                let ret_expr = self.typecheck_and_convert(expr, used_functions)?;
 
                 let ret_expr = self.convert_by_assignment(&ret_expr, ret_type)?;
 
                 nodes::Statement::Return(Some(ret_expr), *line)
             },
             nodes::Statement::Expression(expr, line) => {
-                let expr = self.typecheck_and_convert(expr)?;
+                let expr = self.typecheck_and_convert(expr, used_functions)?;
 
                 nodes::Statement::Expression(expr, *line)
             },
             nodes::Statement::Compound(block, line) => {
-                let block = match self.typecheck_block(block, ret_type, *line)? {
+                let block = match self.typecheck_block(block, ret_type, *line, used_functions)? {
                     nodes::Statement::Compound(items, _) => items,
                     e => unreachable!("INTERNAL ERROR. PLEASE REPORT: Expected Compound, got {:?}", e),
                 };
@@ -407,10 +410,10 @@ impl TypeChecker {
                 nodes::Statement::Compound(block, *line)
             },
             nodes::Statement::If(expr, block, else_block, line) => {
-                let expr = self.typecheck_and_convert(expr)?;
-                let block = self.typecheck_statement(block, ret_type)?;
+                let expr = self.typecheck_and_convert(expr, used_functions)?;
+                let block = self.typecheck_statement(block, ret_type, used_functions)?;
                 let else_block = if else_block.is_some() {
-                    Some(self.typecheck_statement(else_block.as_ref().as_ref().unwrap(), ret_type)?) // im sorry
+                    Some(self.typecheck_statement(else_block.as_ref().as_ref().unwrap(), ret_type, used_functions)?) // im sorry
                 } else {
                     None
                 };
@@ -418,30 +421,30 @@ impl TypeChecker {
                 nodes::Statement::If(expr.clone(), Box::new(block.clone()), Box::new(else_block), *line)
             },
             nodes::Statement::While(expr, block, label, line) => {
-                let expr = self.typecheck_and_convert(expr)?;
-                let block = self.typecheck_statement(block, ret_type)?;
+                let expr = self.typecheck_and_convert(expr, used_functions)?;
+                let block = self.typecheck_statement(block, ret_type, used_functions)?;
 
                 nodes::Statement::While(expr.clone(), Box::new(block.clone()), label.clone(), *line)
             },
             nodes::Statement::DoWhile(block, expr, label, line) => {
-                let block = self.typecheck_statement(block, ret_type)?;
-                let expr = self.typecheck_and_convert(expr)?;
+                let block = self.typecheck_statement(block, ret_type, used_functions)?;
+                let expr = self.typecheck_and_convert(expr, used_functions)?;
 
                 nodes::Statement::DoWhile(Box::new(block), expr.clone(), label.clone(), *line)
             },
             nodes::Statement::For(init, cond, post, block, label, line) => {
                 let init = match init {
-                    nodes::ForInit::Declaration(decl, line) => nodes::ForInit::Declaration(self.typecheck_variable_declaration(&self.decl_to_var(decl))?, *line),
-                    nodes::ForInit::Expression(expr, line) => nodes::ForInit::Expression(self.typecheck_and_convert(expr)?, *line),
+                    nodes::ForInit::Declaration(decl, line) => nodes::ForInit::Declaration(self.typecheck_variable_declaration(&self.decl_to_var(decl), used_functions)?, *line),
+                    nodes::ForInit::Expression(expr, line) => nodes::ForInit::Expression(self.typecheck_and_convert(expr, used_functions)?, *line),
                     nodes::ForInit::Empty(line) => nodes::ForInit::Empty(*line),
                 };
                 let cond = if let Some(cond_expr) = cond.as_ref() {
-                    Some(self.typecheck_and_convert(cond_expr)?)
+                    Some(self.typecheck_and_convert(cond_expr, used_functions)?)
                 } else { None };
                 let post = if let Some(expr) = post.as_ref() {
-                    Some(self.typecheck_and_convert(expr)?)
+                    Some(self.typecheck_and_convert(expr, used_functions)?)
                 } else { None };
-                let block = self.typecheck_statement(block, ret_type)?;
+                let block = self.typecheck_statement(block, ret_type, used_functions)?;
 
                 nodes::Statement::For(init, cond, post, Box::new(block), label.clone(), *line)
             },
@@ -548,9 +551,14 @@ impl TypeChecker {
         }
     }
 
-    fn typecheck_expression(&self, expr: &nodes::Expression) -> Result<nodes::Expression, errors::Error> {
+    fn typecheck_expression(&self, expr: &nodes::Expression, used_functions: &mut HashSet<String>) -> Result<nodes::Expression, errors::Error> {
         Ok(match expr.expr {
             nodes::ExpressionEnum::FunctionCall(ref ident, ref args, line) => {
+                if !used_functions.contains(ident) { // so we dont do unnecessary clones
+                    // TODO! use arc<str> or smth so we don't have to do a shit ton of clones
+                    used_functions.insert(ident.clone());
+                }
+
                 let ident_type = self.symbol_table.lookup(ident).unwrap();
                 
                 match ident_type.1 {
@@ -578,7 +586,7 @@ impl TypeChecker {
 
                 let mut new_args = Vec::with_capacity(args.len());
                 for (idx, arg) in args.iter().enumerate() {
-                    let arg = self.typecheck_and_convert(arg)?;
+                    let arg = self.typecheck_and_convert(arg, used_functions)?;
                     new_args.push(self.convert_by_assignment(&arg, &fn_type[idx])?);
                 }
 
@@ -614,8 +622,8 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Assign(ref lhs, ref rhs, line) => {
-                let lft = self.typecheck_and_convert(&*lhs)?;
-                let rht = self.typecheck_and_convert(&*rhs)?;
+                let lft = self.typecheck_and_convert(&*lhs, used_functions)?;
+                let rht = self.typecheck_and_convert(&*rhs, used_functions)?;
 
                 if lft.ty != rht.ty {
                     return Err(errors::Error::new(
@@ -644,8 +652,8 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::OpAssign(op, ref lhs, ref rhs, line) => {
-                let lft = self.typecheck_and_convert(&*lhs)?;
-                let rht = self.typecheck_and_convert(&*rhs)?;
+                let lft = self.typecheck_and_convert(&*lhs, used_functions)?;
+                let rht = self.typecheck_and_convert(&*rhs, used_functions)?;
 
                 if lft.ty != rht.ty {
                     return Err(errors::Error::new(
@@ -674,9 +682,9 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Conditional(ref cond, ref then, ref els, line) => {
-                let cond = self.typecheck_and_convert(&*cond)?;
-                let then = self.typecheck_and_convert(&*then)?;
-                let els = self.typecheck_and_convert(&*els)?;
+                let cond = self.typecheck_and_convert(&*cond, used_functions)?;
+                let then = self.typecheck_and_convert(&*then, used_functions)?;
+                let els = self.typecheck_and_convert(&*els, used_functions)?;
 
                 if !self.is_scalar_type(&cond.ty) {
                     return Err(errors::Error::new(
@@ -732,7 +740,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Increment(ref inner_expr, line) => {
-                let inner_expr = self.typecheck_and_convert(&*inner_expr)?;
+                let inner_expr = self.typecheck_and_convert(&*inner_expr, used_functions)?;
 
                 let ty = inner_expr.ty.clone();
 
@@ -743,7 +751,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Decrement(ref inner_expr, line) => {
-                let inner_expr = self.typecheck_and_convert(&*inner_expr)?;
+                let inner_expr = self.typecheck_and_convert(&*inner_expr, used_functions)?;
 
                 let ty = inner_expr.ty.clone();
 
@@ -754,7 +762,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Unop(unop, ref expr, line) => {
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
 
                 if !self.is_scalar_type(&expr.ty) {
                     return Err(errors::Error::new(
@@ -823,8 +831,8 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Binop(binop, ref lhs,  ref rhs, line) => {
-                let left = self.typecheck_and_convert(&*lhs)?;
-                let right = self.typecheck_and_convert(&*rhs)?;
+                let left = self.typecheck_and_convert(&*lhs, used_functions)?;
+                let right = self.typecheck_and_convert(&*rhs, used_functions)?;
 
                 match binop {
                     nodes::Binop::And | nodes::Binop::Or => {
@@ -883,7 +891,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Dereference(ref expr, line) => {
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
                 let ty = match expr.ty { nodes::Type::Pointer(ref ty) => *ty.clone(), _ => return Err(errors::Error::new(
                     errors::ErrorType::Error,
                     format!("Expected Ptr, got {:?}", expr.ty),
@@ -913,7 +921,7 @@ impl TypeChecker {
                     ));
                 }
 
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
 
                 let ty = nodes::Type::Pointer(Box::new(expr.ty.clone()));
                 nodes::Expression {
@@ -923,8 +931,8 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Subscript(ref left, ref right, line) => {
-                let left = self.typecheck_and_convert(&*left)?;
-                let right = self.typecheck_and_convert(&*right)?;
+                let left = self.typecheck_and_convert(&*left, used_functions)?;
+                let right = self.typecheck_and_convert(&*right, used_functions)?;
 
                 // check if both are pointer, xor
                 let lft_ptr = self.is_pointer_type(&left.ty);
@@ -961,7 +969,7 @@ impl TypeChecker {
                 out
             },
             nodes::ExpressionEnum::Cast(ref ty, ref expr, line) => {
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
 
                 if !self.is_scalar_type(ty) {
                     return Err(errors::Error::new(
@@ -999,7 +1007,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::SizeOf(ref expr, line) => {
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
                 if !self.is_complete_type(&expr.ty) {
                     return Err(errors::Error::new(
                         errors::ErrorType::Error,
@@ -1014,7 +1022,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Dot(ref expr, ref field, line) => {
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
 
                 let ty = match expr.ty {
                     nodes::Type::Struct(ref tag) => {
@@ -1044,7 +1052,7 @@ impl TypeChecker {
                 }
             },
             nodes::ExpressionEnum::Arrow(ref expr, ref field, line) => {
-                let expr = self.typecheck_and_convert(&*expr)?;
+                let expr = self.typecheck_and_convert(&*expr, used_functions)?;
 
                 let ty = match expr.ty {
                     nodes::Type::Pointer(ref ty) => {
@@ -1137,8 +1145,8 @@ impl TypeChecker {
         })
     }
 
-    fn typecheck_and_convert(&self, expr: &nodes::Expression) -> Result<nodes::Expression, errors::Error> {
-        let expr = self.typecheck_expression(expr)?;
+    fn typecheck_and_convert(&self, expr: &nodes::Expression, used_functions: &mut HashSet<String>) -> Result<nodes::Expression, errors::Error> {
+        let expr = self.typecheck_expression(expr, used_functions)?;
 
         Ok(match &expr.ty {
             nodes::Type::Array(ty, _) => {
@@ -1223,29 +1231,29 @@ impl TypeChecker {
         return Ok(nodes::Type::Int);
     }
 
-    fn typecheck_block(&mut self, body: &Vec<BlockItem>, ret_type: &nodes::Type, line: usize) -> Result<nodes::Statement, errors::Error> {
+    fn typecheck_block(&mut self, body: &Vec<BlockItem>, ret_type: &nodes::Type, line: usize, used_functions: &mut HashSet<String>) -> Result<nodes::Statement, errors::Error> {
         let mut block_items = Vec::with_capacity(body.len());
         for b in body {
-            block_items.push(self.resolve_block_item(b, ret_type)?);
+            block_items.push(self.resolve_block_item(b, ret_type, used_functions)?);
         }
 
         Ok(nodes::Statement::Compound(block_items, line))
     }
 
-    fn resolve_block_item(&mut self, stmt: &BlockItem, ret_type: &nodes::Type) -> Result<BlockItem, errors::Error> {
+    fn resolve_block_item(&mut self, stmt: &BlockItem, ret_type: &nodes::Type, used_functions: &mut HashSet<String>) -> Result<BlockItem, errors::Error> {
         Ok(match stmt {
             BlockItem::Declaration(decl, _) => {
                 BlockItem::Declaration(match decl {
                     nodes::Declaration::Empty(line) => nodes::Declaration::Empty(*line),
                     nodes::Declaration::FuncDecl(fn_decl, line) => {
-                        self.typecheck_function_declaration(fn_decl)?;
+                        self.typecheck_function_declaration(fn_decl, used_functions)?;
                         nodes::Declaration::Empty(*line)
                     },
-                    nodes::Declaration::VarDecl(var_decl, _) => self.typecheck_variable_declaration(var_decl)?,
+                    nodes::Declaration::VarDecl(var_decl, _) => self.typecheck_variable_declaration(var_decl, used_functions)?,
                     nodes::Declaration::StructDecl(struct_decl, _) => self.typecheck_struct_declaration(struct_decl)?,
                 }, stmt.line())
             },
-            BlockItem::Statement(stmt, line) => BlockItem::Statement(self.typecheck_statement(stmt, ret_type)?, *line),
+            BlockItem::Statement(stmt, line) => BlockItem::Statement(self.typecheck_statement(stmt, ret_type, used_functions)?, *line),
         })
     }
 
@@ -1256,10 +1264,10 @@ impl TypeChecker {
         }
     }
 
-    fn typecheck_variable_declaration(&mut self, decl: &nodes::VarDecl) -> Result<nodes::Declaration, errors::Error> {
+    fn typecheck_variable_declaration(&mut self, decl: &nodes::VarDecl, used_functions: &mut HashSet<String>) -> Result<nodes::Declaration, errors::Error> {
         self.symbol_table.insert(decl.name.clone(), (decl.ty.clone(), nodes::TableEntry::LocalAttr));
         let expr = if decl.expr.is_some() {
-            let expr = self.typecheck_initializer(decl.expr.as_ref().unwrap(), &decl.ty)?;
+            let expr = self.typecheck_initializer(decl.expr.as_ref().unwrap(), &decl.ty, used_functions)?;
 
             Some(expr)
         } else { None };
