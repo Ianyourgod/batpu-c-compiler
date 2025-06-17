@@ -62,7 +62,7 @@ impl ConstantFolding {
                 definition::Instruction::Unary(ref op, ref src, ref dest) => {
                     let (is_const, val) = self.is_constant(src);
 
-                    if is_const {
+                    if is_const && *op != definition::Unop::AddImm {
                         let result = match op {
                             definition::Unop::Negate => {
                                 // 8-bit two's complement negation
@@ -79,7 +79,7 @@ impl ConstantFolding {
                                 !val
                             }
                             definition::Unop::LogicalNot => if val == 0 { 1 } else { 0 },
-                            definition::Unop::AddImm => val+1,
+                            definition::Unop::AddImm => unreachable!(),
                         };
 
                         out.push(definition::Instruction::Copy(dest.clone(), definition::Val::Const(result)));

@@ -116,7 +116,7 @@ impl ReachingCopiesAnalysis {
                 }
                 definition::Instruction::Unary(_, _, dst) |
                 definition::Instruction::Binary(_, _, _, dst) => {
-                    for (i, (copy_src, copy_dst)) in current_reaching_copies.clone().copies.iter().enumerate() {
+                    for (i, (copy_src, copy_dst)) in current_reaching_copies.clone().copies.iter().enumerate().rev() {
                         if copy_src == dst || copy_dst == dst {
                             current_reaching_copies.copies.remove(i);
                         }

@@ -167,7 +167,7 @@ adi r2 -1
                     if func.global && self.include_directives {
                         output.push_str(":global\n");
                     }
-                    output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
+                    output.push_str(&format!(".{}\n", func.name));
                     for instr in &func.body {
                         if let assembly::Instruction::Comment(_) = instr { if !include_comments { continue; } }
                         let instr = self.emit_instruction(instr);

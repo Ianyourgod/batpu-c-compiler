@@ -10,6 +10,11 @@ pub struct InstructionFixupPass {
     current_callee_saved_regs: (Vec<(assembly::Operand, i16)>, i16),
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Context {
+    do_stack_frame: bool,
+}
+
 impl InstructionFixupPass {
     pub fn new(program: assembly::Program, callee_saved: HashMap<String, Vec<assembly::Register>>) -> InstructionFixupPass {
         InstructionFixupPass {
@@ -51,12 +56,19 @@ impl InstructionFixupPass {
         if func.stack_size > 239 {
             let line = source.1.lines().nth(func.line-1).unwrap();
 
-            // TODO: go through function body, find calls, do recursive shit to find the max stack size
-
             errors::inline_warn((func.line, 0), "Stack size is too large. Maximum stack size is 239 bytes.", line, source.0);
         }
 
-        instrs.push(assembly::Instruction::AllocateStack(func.stack_size as u8));
+        //if func.stack_size > 0 {
+            let r14 = assembly::Operand::Register(assembly::Register::new("r14".to_string()));
+            let r14_r = assembly::Register::new("r14".to_string());
+            let r15 = assembly::Operand::Register(assembly::Register::new("r15".to_string()));
+            // output.push_str(&format!(".{}\n    str r14 r15 0\n    adi r14 -1\n    mov r14 r15\n", func.name));
+            instrs.push(assembly::Instruction::Str(r15.clone(), 0, r14_r));
+            instrs.push(assembly::Instruction::Adi(r14.clone(), -1));
+            instrs.push(assembly::Instruction::Mov(r14, r15));
+            instrs.push(assembly::Instruction::AllocateStack(func.stack_size as u8));
+        //}
 
         let mut added_to_sp = 0;
         let mut extra_added_to_sp = 0;
@@ -85,8 +97,12 @@ impl InstructionFixupPass {
             instrs.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), extra_added_to_sp-added_to_sp));
         }
 
+        let context = Context {
+            do_stack_frame: true,
+        };
+
         for stmt in &func.body {
-            self.generate_instruction(stmt, &mut instrs);
+            self.generate_instruction(stmt, &mut instrs, context);
         }
 
         let func = assembly::FuncDecl {
@@ -123,20 +139,22 @@ impl InstructionFixupPass {
                 return reg.clone();
             },
             assembly::Operand::Memory(base_reg, offset) => {
-                instructions.push(assembly::Instruction::Lod(
+                self.handle_lod(
                     base_reg.clone(),
                     *offset,
-                    assembly::Operand::Register(reg.clone())
-                ));
+                    assembly::Operand::Register(reg.clone()),
+                    instructions
+                );
                 return reg.clone();
             },
             assembly::Operand::Data(name) => {
                 let static_offset = self.static_table.get(name).unwrap();
-                instructions.push(assembly::Instruction::Lod(
+                self.handle_lod(
                     assembly::Register::new("r0".to_string()),
                     *static_offset as i16,
-                    assembly::Operand::Register(reg.clone())
-                ));
+                    assembly::Operand::Register(reg.clone()),
+                    instructions
+                );
                 return reg.clone();
             }
         }
@@ -149,7 +167,7 @@ impl InstructionFixupPass {
         }
     }
 
-    fn generate_instruction(&self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>) {
+    fn generate_instruction(&self, stmt: &assembly::Instruction, instructions: &mut Vec<assembly::Instruction>, context: Context) {
         match stmt {
             assembly::Instruction::Comment(_) => instructions.push(stmt.clone()),
 
@@ -170,11 +188,12 @@ impl InstructionFixupPass {
                                 ));
                             }
                             assembly::Operand::Memory(base_reg, off) => {
-                                instructions.push(assembly::Instruction::Lod(
+                                self.handle_lod(
                                     base_reg.clone(),
                                     *off,
                                     assembly::Operand::Register(dst_reg.clone()),
-                                ));
+                                    instructions
+                                );
                             }
 
                             assembly::Operand::Data(_) => unimplemented!(),
@@ -184,34 +203,38 @@ impl InstructionFixupPass {
                     assembly::Operand::Memory(dst_reg, offset) => {
                         match src {
                             assembly::Operand::Register(src_reg) => {
-                                instructions.push(assembly::Instruction::Str(
+                                self.handle_str(
                                     assembly::Operand::Register(src_reg.clone()),
                                     *offset,
                                     dst_reg.clone(),
-                                ));
+                                    instructions
+                                );
                             },
                             assembly::Operand::Immediate(imm) => {
                                 instructions.push(assembly::Instruction::Ldi(
                                     assembly::Operand::Register(assembly::Register::new("r10".to_string())),
                                     imm.clone(),
                                 ));
-                                instructions.push(assembly::Instruction::Str(
+                                self.handle_str(
                                     assembly::Operand::Register(assembly::Register::new("r10".to_string())),
                                     *offset,
                                     dst_reg.clone(),
-                                ));
+                                    instructions
+                                );
                             }
                             assembly::Operand::Memory(base_reg, off) => {
-                                instructions.push(assembly::Instruction::Lod(
+                                self.handle_lod(
                                     base_reg.clone(),
                                     *off,
                                     assembly::Operand::Register(assembly::Register::new("r10".to_string())),
-                                ));
-                                instructions.push(assembly::Instruction::Str(
+                                    instructions
+                                );
+                                self.handle_str(
                                     assembly::Operand::Register(assembly::Register::new("r10".to_string())),
                                     *offset,
                                     dst_reg.clone(),
-                                ));
+                                    instructions
+                                );
                             }
 
                             assembly::Operand::Data(_) => unimplemented!(),
@@ -249,11 +272,12 @@ impl InstructionFixupPass {
                     let (is_mem, reg, offset) = self.is_mem(dst);
 
                     if is_mem {
-                        instructions.push(assembly::Instruction::Str(
+                        self.handle_str(
                             assembly::Operand::Register(dst_reg),
                             offset,
                             reg,
-                        ));
+                            instructions
+                        );
                     } else {
                         unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                     }
@@ -323,11 +347,12 @@ impl InstructionFixupPass {
                     let (is_mem, reg, offset) = self.is_mem(dst);
 
                     if is_mem {
-                        instructions.push(assembly::Instruction::Str(
+                        self.handle_str(
                             assembly::Operand::Register(dst_reg),
                             offset,
                             reg,
-                        ));
+                            instructions
+                        );
                     } else {
                         unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                     }
@@ -354,6 +379,10 @@ impl InstructionFixupPass {
                 ));
             }
             assembly::Instruction::Adi(ref op, i) => {
+                if *i == 0 {
+                    return;
+                }
+
                 let (is_mem, base_reg, offset) = self.is_mem(op);
 
                 if !is_mem {
@@ -372,7 +401,10 @@ impl InstructionFixupPass {
                     i.clone()
                 ));
 
-                instructions.push(assembly::Instruction::Str(reg, offset, base_reg));
+                self.handle_str(
+                    reg, offset, base_reg,
+                    instructions
+                );
             },
             assembly::Instruction::Lod(reg, off, dst) => {
                 // if dst is not a register, we need to put it in a temporary register then store it in dst
@@ -385,12 +417,17 @@ impl InstructionFixupPass {
 
                 let dst_reg = assembly::Register::new("r10".to_string());
 
-                instructions.push(assembly::Instruction::Lod(reg.clone(), *off, assembly::Operand::Register(dst_reg.clone())));
+                self.handle_lod(
+                    reg.clone(), *off, assembly::Operand::Register(dst_reg.clone()),
+                    instructions
+                );
 
                 let (is_mem, base_reg, offset) = self.is_mem(dst);
 
                 if is_mem {
-                    instructions.push(assembly::Instruction::Str(assembly::Operand::Register(dst_reg), offset, base_reg));
+                    self.handle_str(
+                        assembly::Operand::Register(dst_reg), offset, base_reg,
+                    instructions);
                 } else {
                     unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                 }
@@ -408,7 +445,9 @@ impl InstructionFixupPass {
 
                 src_reg = self.to_register(src, &src_reg, instructions);
 
-                instructions.push(assembly::Instruction::Str(assembly::Operand::Register(src_reg), *off, dst.clone()));
+                self.handle_str(
+                    assembly::Operand::Register(src_reg), *off, dst.clone(),
+                instructions);
             }
             assembly::Instruction::Lea(ref src, ref dst) => {
                 // alright, this is a "fake" instruction
@@ -424,20 +463,24 @@ impl InstructionFixupPass {
                     _ => unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid source operand: {:?}", src),
                 };
 
-                instructions.push(assembly::Instruction::Adi(
-                    assembly::Operand::Register(src.0.clone()),
-                    -src.1 as i16,
-                ));
+                if src.1 != 0 {
+                    instructions.push(assembly::Instruction::Adi(
+                        assembly::Operand::Register(src.0.clone()),
+                        -src.1 as i16,
+                    ));
+                }
 
                 if is_dst_reg {
                     instructions.push(assembly::Instruction::Mov(
                         assembly::Operand::Register(src.0.clone()),
                         dst.clone(),
                     ));
-                    instructions.push(assembly::Instruction::Adi(
-                        assembly::Operand::Register(src.0),
-                        src.1 as i16,
-                    ));
+                    if src.1 != 0 {
+                        instructions.push(assembly::Instruction::Adi(
+                            assembly::Operand::Register(src.0),
+                            src.1 as i16,
+                        ));
+                    }
                     return;
                 }
 
@@ -448,58 +491,68 @@ impl InstructionFixupPass {
                     assembly::Operand::Register(dst_reg.clone()),
                 ));
 
-                instructions.push(assembly::Instruction::Adi(
-                    assembly::Operand::Register(src.0),
-                    src.1 as i16,
-                ));
+                if src.1 != 0 {
+                    instructions.push(assembly::Instruction::Adi(
+                        assembly::Operand::Register(src.0),
+                        src.1 as i16,
+                    ));
+                }
 
                 let (is_mem, base_reg, offset) = self.is_mem(dst);
 
                 if is_mem {
-                    instructions.push(assembly::Instruction::Str(assembly::Operand::Register(dst_reg), offset, base_reg));
+                    self.handle_str(
+                        assembly::Operand::Register(dst_reg), offset, base_reg,
+                    instructions);
                 } else {
                     unreachable!("INTERNAL ERROR. PLEASE REPORT: Invalid destination operand: {:?}", dst);
                 }
             },
             assembly::Instruction::Return => {
-                let mut added_to_sp = 0;
-                let r14 = assembly::Register::new(String::from("r14"));
+                if self.current_callee_saved_regs.0.len() > 0 {
+                    let mut added_to_sp = 0;
+                    let r14 = assembly::Register::new(String::from("r14"));
 
-                instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), self.current_callee_saved_regs.0.len() as i16));
+                    instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), self.current_callee_saved_regs.0.len() as i16));
 
-                for (i, reg) in self.current_callee_saved_regs.0.iter().enumerate() {
-                    // push reg
-                    let mod_i = i as i16 % 8;
-                    let added_extra = mod_i == 0 && i > 0;
-                    if added_extra {
-                        added_to_sp += 8;
-                        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), -8));
+                    for (i, reg) in self.current_callee_saved_regs.0.iter().enumerate() {
+                        // push reg
+                        let mod_i = i as i16 % 8;
+                        let added_extra = mod_i == 0 && i > 0;
+                        if added_extra {
+                            added_to_sp += 8;
+                            instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), -8));
+                        }
+            
+                        self.handle_lod(
+                            r14.clone(), mod_i, reg.0.clone(),
+                        instructions);
                     }
-        
-                    instructions.push(assembly::Instruction::Lod(r14.clone(), mod_i, reg.0.clone()));
-                }
 
-                if added_to_sp != 0 {
-                    instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), added_to_sp));
-                }
+                    if added_to_sp != 0 {
+                        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14.clone()), added_to_sp));
+                    }
 
-                instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14), self.current_callee_saved_regs.1));
+                    instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(r14), self.current_callee_saved_regs.1));
+                }
 
                 // mov r15 r14\n    lod r14 r15 1\n    adi r14 1\n    
 
-                instructions.push(assembly::Instruction::Mov(
-                    assembly::Operand::Register(assembly::Register::new(String::from("r15"))),
-                    assembly::Operand::Register(assembly::Register::new(String::from("r14")))
-                ));
-                instructions.push(assembly::Instruction::Lod(
-                    assembly::Register::new(String::from("r14")),
-                    -1,
-                    assembly::Operand::Register(assembly::Register::new(String::from("r15"))),
-                ));
-                instructions.push(assembly::Instruction::Adi(
-                    assembly::Operand::Register(assembly::Register::new(String::from("r14"))),
-                    1
-                ));
+                if context.do_stack_frame {
+                    instructions.push(assembly::Instruction::Mov(
+                        assembly::Operand::Register(assembly::Register::new(String::from("r15"))),
+                        assembly::Operand::Register(assembly::Register::new(String::from("r14")))
+                    ));
+                    instructions.push(assembly::Instruction::Lod(
+                        assembly::Register::new(String::from("r14")),
+                        -1,
+                        assembly::Operand::Register(assembly::Register::new(String::from("r15"))),
+                    ));
+                    instructions.push(assembly::Instruction::Adi(
+                        assembly::Operand::Register(assembly::Register::new(String::from("r14"))),
+                        1
+                    ));
+                }
 
                 instructions.push(assembly::Instruction::Return);
             }
@@ -512,5 +565,31 @@ impl InstructionFixupPass {
             assembly::Instruction::Call(_, _) => instructions.push(stmt.clone()),
             //d_ => instructions.push(stmt.clone()),
         }
+    }
+
+    fn handle_str(&self, src: assembly::Operand, offset: i16, dst: assembly::Register, instructions: &mut Vec<assembly::Instruction>) {
+        if offset >= -8 && offset <= 7 {
+            instructions.push(assembly::Instruction::Str(src, offset, dst));
+            return;
+        }
+
+        let new_offset: i16 = if offset > -8 { -8 } else { 7 };
+        let adding = offset - new_offset;
+        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(dst.clone()), adding));
+        instructions.push(assembly::Instruction::Str(src, new_offset, dst.clone()));
+        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(dst), -adding));
+    }
+
+    fn handle_lod(&self, src: assembly::Register, offset: i16, dst: assembly::Operand, instructions: &mut Vec<assembly::Instruction>) {
+        if offset >= -8 && offset <= 7 {
+            instructions.push(assembly::Instruction::Lod(src, offset, dst));
+            return;
+        }
+
+        let new_offset: i16 = if offset > -8 { -8 } else { 7 };
+        let adding = offset - new_offset;
+        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(src.clone()), adding));
+        instructions.push(assembly::Instruction::Lod(src.clone(), new_offset, dst));
+        instructions.push(assembly::Instruction::Adi(assembly::Operand::Register(src), -adding));
     }
 }

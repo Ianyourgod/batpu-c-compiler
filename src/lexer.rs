@@ -6,8 +6,8 @@ use super::errors;
 // this macro takes in tuples of the form (String, TokenType). the first tuple is the (0) current char and then (1) what to return if nothing matches
 // for the rest of the tuples, if the current char matches the first element, return the second element
 macro_rules! after_char {
-    ($slf: expr, $ch:expr, $n:expr, $(($c:expr, $t:expr)),*) => {
-        match ($ch)? {
+    ($slf: expr, $n:expr, $(($c:expr, $t:expr)),*) => {
+        match ($slf.peek_char())? {
             $(
                 $c => { $slf.read_char(); $t },
             )*
@@ -156,53 +156,53 @@ impl Lexer {
             ']' => TokenType::RBracket,
             ';' => TokenType::Semicolon,
             ',' => TokenType::Comma,
-            '+' => after_char!(self, self.peek_char(),
+            '+' => after_char!(self,
                 TokenType::Plus,
                 ('=', TokenType::AddAssign),
                 ('+', TokenType::Increment)
             ),
-            '-' => after_char!(self, self.peek_char(),
+            '-' => after_char!(self,
                 TokenType::Minus,
                 ('=', TokenType::SubAssign),
                 ('-', TokenType::Decrement),
                 ('>', TokenType::Arrow)
             ),
-            '*' => after_char!(self, self.peek_char(),
+            '*' => after_char!(self,
                 TokenType::Star,
                 ('=', TokenType::MulAssign)
             ),
-            '/' => after_char!(self, self.peek_char(),
+            '/' => after_char!(self,
                 TokenType::Slash,
                 ('=', TokenType::DivAssign)
             ),
-            '%' => after_char!(self, self.peek_char(),
+            '%' => after_char!(self,
                 TokenType::Percent,
                 ('=', TokenType::ModAssign)
             ),
             '~' => TokenType::Tilde,
-            '=' => after_char!(self, self.peek_char(),
+            '=' => after_char!(self,
                 TokenType::Equals,
                 ('=', TokenType::Equal)
             ),
-            '!' => after_char!(self, self.peek_char(),
+            '!' => after_char!(self,
                 TokenType::LogicalNot,
                 ('=', TokenType::NotEqual)
             ),
-            '&' => after_char!(self, self.peek_char(),
+            '&' => after_char!(self,
                 TokenType::Ampersand,
                 ('&', TokenType::LogicalAnd)
             ),
-            '|' => after_char!(self, self.peek_char(),
+            '|' => after_char!(self,
                 TokenType::BitwiseOr,
                 ('|', TokenType::LogicalOr)
             ),
             '^' => TokenType::BitwiseXor,
-            '<' => after_char!(self, self.peek_char(),
+            '<' => after_char!(self,
                 TokenType::LessThan,
                 ('=', TokenType::LessThanEqual),
                 ('<', TokenType::LeftShift)
             ),
-            '>' => after_char!(self, self.peek_char(),
+            '>' => after_char!(self,
                 TokenType::GreaterThan,
                 ('=', TokenType::GreaterThanEqual),
                 ('>', TokenType::RightShift)
