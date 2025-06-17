@@ -105,7 +105,10 @@ impl LoopLabeling {
                 }
                 nodes::Statement::Compound(new_block, *line)
             },
-            nodes::Statement::Return(_, _) | nodes::Statement::Expression(_, _) | nodes::Statement::Empty(_) => stmt.clone(),
+            nodes::Statement::InlineAsm(_, _) |
+            nodes::Statement::Return(_, _) |
+            nodes::Statement::Expression(_, _) |
+            nodes::Statement::Empty(_) => stmt.clone(),
         })
     }
 }

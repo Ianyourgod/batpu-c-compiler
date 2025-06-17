@@ -289,8 +289,9 @@ impl ReachingCopiesAnalysis {
                 let new_val = self.replace_operand(val, reaching_copies);
                 return Some(definition::Instruction::Store(new_val, dst.clone()));
             }
-            definition::Instruction::Jump(_) => return Some(instruction.clone()),
-            definition::Instruction::Label(_) => return Some(instruction.clone()),
+            definition::Instruction::InlineAsm(_) |
+            definition::Instruction::Jump(_) |
+            definition::Instruction::Label(_) |
             definition::Instruction::GetAddress(_, _) => return Some(instruction.clone()),
         }
     }

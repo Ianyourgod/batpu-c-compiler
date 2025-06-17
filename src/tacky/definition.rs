@@ -38,6 +38,7 @@ pub enum Instruction {
     CopyToOffset(Val, Val, i16), // val, var, offset
     CopyFromOffset(Val, i16, Val), // var, offset, val
     AddPtr(Val, Val, i16, Val), // val, val, offset, dest
+    InlineAsm(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

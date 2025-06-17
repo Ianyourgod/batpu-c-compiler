@@ -346,8 +346,6 @@ impl VariableResolution {
                 }
                 nodes::Statement::Compound(new_stmts, *line)
             }
-            nodes::Statement::Break(_, _) |
-            nodes::Statement::Continue(_, _) => stmt.clone(),
             nodes::Statement::While(ref cond, ref body, _, line) => {
                 let cond = self.resolve_expression(cond, context)?;
                 let body = Box::new(self.resolve_statement(&**body, context)?);
@@ -418,6 +416,9 @@ impl VariableResolution {
 
                 nodes::Statement::For(init, cond, post, body, String::new(), *line)
             },
+            nodes::Statement::Break(_, _) |
+            nodes::Statement::Continue(_, _) |
+            nodes::Statement::InlineAsm(_, _) |
             nodes::Statement::Empty(_) => stmt.clone(),
         })
     }

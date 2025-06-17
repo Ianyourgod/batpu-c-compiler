@@ -557,6 +557,7 @@ impl InstructionFixupPass {
                 instructions.push(assembly::Instruction::Return);
             }
 
+            assembly::Instruction::UserAsm(_) |
             assembly::Instruction::Ldi(_, _) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Jmp(_) |

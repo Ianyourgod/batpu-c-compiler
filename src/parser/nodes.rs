@@ -28,21 +28,23 @@ pub enum Statement {
     DoWhile(Box<Statement>, Expression, String, usize),
     For(ForInit, Option<Expression>, Option<Expression>, Box<Statement>, String, usize),
     Empty(usize),
+    InlineAsm(String, usize)
 }
 
 impl Statement {
     pub fn line(&self) -> usize {
         match self {
-            Statement::Return(_, line) => *line,
-            Statement::Expression(_, line) => *line,
-            Statement::If(_, _, _, line) => *line,
-            Statement::Compound(_, line) => *line,
-            Statement::Break(_, line) => *line,
-            Statement::Continue(_, line) => *line,
-            Statement::While(_, _, _, line) => *line,
-            Statement::DoWhile(_, _, _, line) => *line,
-            Statement::For(_, _, _, _, _, line) => *line,
-            Statement::Empty(line) => *line,
+            Statement::Return(_, line) |
+            Statement::Expression(_, line) |
+            Statement::If(_, _, _, line) |
+            Statement::Compound(_, line) |
+            Statement::Break(_, line) |
+            Statement::Continue(_, line) |
+            Statement::While(_, _, _, line) |
+            Statement::DoWhile(_, _, _, line) |
+            Statement::For(_, _, _, _, _, line) |
+            Statement::Empty(line) |
+            Statement::InlineAsm(_, line) => *line
         }
     }
 }

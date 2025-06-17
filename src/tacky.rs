@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::parser::nodes;
 
 pub struct Tacky<'a> {
-    program: nodes::Program,
+    program: nodes::Program, // TODO! don't take pointers everywhere cuz of this shit
     temp_count: i32,
     symbol_table: &'a nodes::SymbolTable,
     type_table: &'a nodes::TypeTable,
@@ -279,6 +279,9 @@ impl<'a> Tacky<'a> {
                 body.push(definition::Instruction::Jump(loop_start_label.clone()));
 
                 body.push(definition::Instruction::Label(break_label.clone()));
+            }
+            nodes::Statement::InlineAsm(asm, _) => {
+                body.push(definition::Instruction::InlineAsm(asm.clone()))
             }
             nodes::Statement::Empty(_) => {}
         }

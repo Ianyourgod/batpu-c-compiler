@@ -292,6 +292,7 @@ impl LivenessAnalysis {
                 (used_registers, updated)
             }
 
+            assembly::Instruction::UserAsm(_) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Comment(_) |
             assembly::Instruction::Jmp(_) |

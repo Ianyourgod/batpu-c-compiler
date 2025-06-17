@@ -123,6 +123,7 @@ impl PseudoReplacePass {
 
                 instructions.push(assembly::Instruction::Str(src, offset.clone(), dst.clone()));
             },
+            assembly::Instruction::UserAsm(_) |
             assembly::Instruction::Return |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Jmp(_) |

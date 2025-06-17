@@ -184,7 +184,8 @@ impl DeadStoreElimination {
                     }
                 }
 
-                definition::Instruction::Label(_) => (),
+                definition::Instruction::InlineAsm(_) |
+                definition::Instruction::Label(_) |
                 definition::Instruction::Jump(_) => (),
             }
         }
@@ -295,6 +296,7 @@ impl DeadStoreElimination {
             definition::Instruction::Label(_) |
             definition::Instruction::Return(_) |
             definition::Instruction::Store(_, _) |
+            definition::Instruction::InlineAsm(_) |
             definition::Instruction::CopyToOffset(_, _, _) => false,
 
 

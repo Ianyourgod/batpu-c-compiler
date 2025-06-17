@@ -238,6 +238,7 @@ fn rewrite_coalesced(instructions: &Vec<assembly::Instruction>, coalesced_regs: 
                 new_instructions.push(assembly::Instruction::Str(src, *off, dst));
             }
 
+            assembly::Instruction::UserAsm(_) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Comment(_) |
             assembly::Instruction::Jmp(_) |
@@ -443,6 +444,7 @@ fn add_pseudo_registers(graph: &mut Graph, instructions: &assembly::FuncDecl, al
                 }
             }
 
+            assembly::Instruction::UserAsm(_) |
             assembly::Instruction::AllocateStack(_) |
             assembly::Instruction::Comment(_) |
             assembly::Instruction::Jmp(_) |
@@ -566,6 +568,7 @@ fn replace_pseudoregs(instructions: &Vec<assembly::Instruction>, register_map: H
                 assembly::Instruction::Unary(unop.clone(), op, dst)
             }
 
+            assembly::Instruction::UserAsm(_) |
             assembly::Instruction::Comment(_) |
             assembly::Instruction::Jmp(_) |
             assembly::Instruction::JmpCC(_, _) |

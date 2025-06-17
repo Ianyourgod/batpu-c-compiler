@@ -510,8 +510,29 @@ impl Parser {
                         nodes::Statement::Continue("".to_string(), line)
                     },
                     Keyword::Sizeof => {
-                        nodes::Statement::Expression(self.parse_expression(0)?, line)
+                        let expr = self.parse_expression(0)?;
+                        self.consume(TokenType::Semicolon)?;
+
+                        nodes::Statement::Expression(expr, line)
                     },
+                    Keyword::Asm => {
+                        self.next_token()?;
+
+                        self.consume(TokenType::LParen)?;
+
+                        let asm = if let TokenType::StringLiteral(ref s) = self.current_token.token_type {
+                            s.clone()
+                        } else {
+                            return Err(errors::Error { ty: errors::ErrorType::Error, message: format!("Expected string literal in ASM statement, found {:?}", self.current_token.token_type), line: self.current_token.line });
+                        };
+
+                        self.next_token()?;
+
+                        self.consume(TokenType::RParen)?;
+                        self.consume(TokenType::Semicolon)?;
+
+                        nodes::Statement::InlineAsm(asm, line)
+                    }
                     _ => return Err(errors::Error::new(errors::ErrorType::Error, format!("Invalid keyword {:?}", keyword), self.current_token.line)),
                 }
             },

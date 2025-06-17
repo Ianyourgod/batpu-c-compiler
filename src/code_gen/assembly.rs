@@ -52,6 +52,8 @@ pub enum Instruction {
 
     // "fake" instruction
     Lea(Operand, Operand),
+
+    UserAsm(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

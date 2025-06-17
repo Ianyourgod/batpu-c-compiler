@@ -590,6 +590,9 @@ impl ConvertPass {
                     dst
                 ));
             },
+            definition::Instruction::InlineAsm(asm) => {
+                instructions.push(assembly::Instruction::UserAsm(asm.clone()));
+            }
         }
     }
 

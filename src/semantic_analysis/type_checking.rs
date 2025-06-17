@@ -367,6 +367,7 @@ impl TypeChecker {
 
     fn typecheck_statement(&mut self, stmt: &nodes::Statement, ret_type: &nodes::Type, used_functions: &mut HashSet<String>) -> Result<nodes::Statement, errors::Error> {
         Ok(match stmt {
+            nodes::Statement::InlineAsm(_, _) |
             nodes::Statement::Break(_, _) | nodes::Statement::Continue(_, _) |
             nodes::Statement::Empty(_) => stmt.clone(),
             nodes::Statement::Return(expr, line) => {

@@ -343,6 +343,9 @@ adi r2 -1
             assembly::Instruction::Comment(ref s) => {
                 format!("// {}", s)
             }
+            assembly::Instruction::UserAsm(asm) => {
+                asm.clone()
+            }
 
             assembly::Instruction::Lea(_, _) => unreachable!(),
         }

@@ -95,6 +95,7 @@ pub enum Keyword {
     Continue,
     Sizeof,
     Typedef,
+    Asm,
     TDName(String),
 }
 
@@ -117,6 +118,7 @@ impl Keyword {
             "continue" => Some(Keyword::Continue),
             "sizeof" => Some(Keyword::Sizeof),
             "typedef" => Some(Keyword::Typedef),
+            "__asm__" => Some(Keyword::Asm),
             _ => None
         }
     }
