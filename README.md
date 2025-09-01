@@ -57,10 +57,6 @@ If you choose not to specify an output file, the assembly will be placed in `out
 
 BCC is licensed under the MIT License. See [LICENSE](LICENSE) for more information.
 
-### Contributing
-
-If you would like to contribute to BCC, please read [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
-
 ### Feature Requests
 
 If you would like to request a feature, please open an issue with the `feature-request` label.
