@@ -17,7 +17,6 @@ BCC is a C compiler for the BatPU architecture. It is based off of "Writing a C 
     - [Building](#building)
     - [Usage](#usage)
     - [License](#license)
-    - [Contributing](#contributing)
     - [Feature Requests](#feature-requests)
     - [Acknowledgements](#acknowledgements)
 
